@@ -1,0 +1,9 @@
+/* FAB Extension Styles */
+
+#fab-button {
+  user-select: none;
+}
+
+#fab-button:active {
+  transform: scale(0.95);
+}
