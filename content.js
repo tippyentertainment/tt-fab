@@ -1,7 +1,6 @@
-// Content script - FAB with TaskingBot integration
+// Content script - FAB with error handling
 
 function createFAB() {
-  // Remove existing FAB if present
   const existingFAB = document.getElementById('fab-button');
   if (existingFAB) existingFAB.remove();
 
@@ -24,24 +23,11 @@ function createFAB() {
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     z-index: 999999;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s;
     font-weight: 300;
-    user-select: none;
   `;
   
-  fab.addEventListener('mouseenter', () => {
-    fab.style.transform = 'scale(1.1) rotate(90deg)';
-    fab.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.6)';
-  });
-  
-  fab.addEventListener('mouseleave', () => {
-    fab.style.transform = 'scale(1) rotate(0deg)';
-    fab.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-  });
-  
-  fab.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  fab.addEventListener('click', () => {
     showTaskModal();
   });
   
@@ -72,9 +58,7 @@ function showTaskModal() {
   `;
   
   document.body.appendChild(modal);
-  
-  const titleInput = document.getElementById('fab-task-title');
-  titleInput.focus();
+  document.getElementById('fab-task-title').focus();
   
   document.getElementById('fab-cancel').addEventListener('click', () => {
     modal.remove();
@@ -89,42 +73,45 @@ function showTaskModal() {
       return;
     }
     
-    // Show loading state
     const createBtn = document.getElementById('fab-create');
     createBtn.textContent = 'Creating...';
     createBtn.disabled = true;
     
-    chrome.runtime.sendMessage({
-      action: 'createTask',
-      title: title,
-      description: desc,
-      url: window.location.href,
-      pageTitle: document.title
-    }, (response) => {
-      if (response && response.success) {
-        modal.remove();
-        showNotification('✓ Task created successfully!');
-      } else {
-        createBtn.textContent = 'Create Task';
-        createBtn.disabled = false;
-        alert('Failed to create task: ' + (response?.error || 'Unknown error'));
-      }
-    });
+    try {
+      chrome.runtime.sendMessage({
+        action: 'createTask',
+        title: title,
+        description: desc,
+        url: window.location.href,
+        pageTitle: document.title
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          // Extension was reloaded - fallback to opening TaskingBot
+          const message = encodeURIComponent(`Create task: ${title}${desc ? '\n\n' + desc : ''}\n\nSource: ${document.title}\nURL: ${window.location.href}`);
+          window.open(`https://tasking.tech?message=${message}`, '_blank');
+          modal.remove();
+          return;
+        }
+        
+        if (response && response.success) {
+          modal.remove();
+          showNotification('✓ Task created!');
+        } else {
+          createBtn.textContent = 'Create Task';
+          createBtn.disabled = false;
+          alert('Failed to create task: ' + (response?.error || 'Unknown error'));
+        }
+      });
+    } catch (error) {
+      // Fallback if extension context is invalid
+      const message = encodeURIComponent(`Create task: ${title}${desc ? '\n\n' + desc : ''}\n\nSource: ${document.title}\nURL: ${window.location.href}`);
+      window.open(`https://tasking.tech?message=${message}`, '_blank');
+      modal.remove();
+    }
   });
   
-  // Close on background click
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.remove();
-    }
-  });
-  
-  // Close on Escape key
-  document.addEventListener('keydown', function escHandler(e) {
-    if (e.key === 'Escape') {
-      modal.remove();
-      document.removeEventListener('keydown', escHandler);
-    }
+    if (e.target === modal) modal.remove();
   });
 }
 
@@ -141,30 +128,11 @@ function showNotification(message) {
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     z-index: 9999998;
     font-size: 14px;
-    font-weight: 500;
   `;
   notification.textContent = message;
   document.body.appendChild(notification);
   setTimeout(() => notification.remove(), 3000);
 }
 
-// Listen for toggle messages from popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'toggleFab') {
-    const fab = document.getElementById('fab-button');
-    if (fab) {
-      fab.style.display = fab.style.display === 'none' ? 'flex' : 'none';
-      sendResponse({ visible: fab.style.display !== 'none' });
-    } else {
-      sendResponse({ visible: false });
-    }
-  }
-  return true;
-});
-
-// Initialize FAB
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', createFAB);
-} else {
-  createFAB();
-}
+// Initialize
+createFAB();
