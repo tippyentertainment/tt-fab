@@ -1,4 +1,4 @@
-// Background service worker - Opens TaskingBot with pre-filled task
+// Background service worker - TaskingBot API integration
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('FAB Extension installed');
@@ -6,23 +6,31 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'createTask') {
-    // Build the task message
-    const taskMessage = `Create task: ${request.title}${request.description ? '\n\n' + request.description : ''}\n\nSource: ${request.pageTitle}\nURL: ${request.url}`;
-    
-    // Open TaskingBot with the message pre-filled
-    const taskingBotUrl = `https://tasking.tech?message=${encodeURIComponent(taskMessage)}`;
-    
-    chrome.tabs.create({ url: taskingBotUrl }, (tab) => {
-      sendResponse({ success: true, tabId: tab.id });
-    });
-    
-    return true; // Keep the message channel open for async response
-  }
-  
-  if (request.action === 'getTabInfo') {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      sendResponse({ tab: tabs[0] });
-    });
+    createTask(request.title, request.description, request.url, request.pageTitle)
+      .then(result => sendResponse({ success: true, task: result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
 });
+
+async function createTask(title, description, url, pageTitle) {
+  // Use TaskingBot's internal API
+  const response = await fetch('https://tasking.tech/api/tasks', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include', // This includes your session cookie
+    body: JSON.stringify({
+      title: title,
+      description: `${description}\n\nSource: ${pageTitle}\nURL: ${url}`,
+      priority: 'medium'
+    })
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to create task');
+  }
+  
+  return await response.json();
+}
