@@ -1,6 +1,4 @@
-// Background service worker - TaskingBot API integration
-
-const TASKINGBOT_API = 'https://tasking.tech/api/tasks';
+// Background service worker - Opens TaskingBot with pre-filled task
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('FAB Extension installed');
@@ -8,10 +6,17 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'createTask') {
-    createTaskingBotTask(request.title, request.description, request.url, request.pageTitle)
-      .then(result => sendResponse({ success: true, task: result }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
+    // Build the task message
+    const taskMessage = `Create task: ${request.title}${request.description ? '\n\n' + request.description : ''}\n\nSource: ${request.pageTitle}\nURL: ${request.url}`;
+    
+    // Open TaskingBot with the message pre-filled
+    const taskingBotUrl = `https://tasking.tech?message=${encodeURIComponent(taskMessage)}`;
+    
+    chrome.tabs.create({ url: taskingBotUrl }, (tab) => {
+      sendResponse({ success: true, tabId: tab.id });
+    });
+    
+    return true; // Keep the message channel open for async response
   }
   
   if (request.action === 'getTabInfo') {
@@ -21,31 +26,3 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
-
-async function createTaskingBotTask(title, description, url, pageTitle) {
-  const taskData = {
-    title: title,
-    description: `${description}\n\nSource: ${pageTitle}\nURL: ${url}`,
-    priority: 'medium',
-    status: 'open'
-  };
-  
-  try {
-    const response = await fetch(TASKINGBOT_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(taskData)
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to create task');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error creating task:', error);
-    throw error;
-  }
-}
