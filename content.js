@@ -1,4 +1,4 @@
-// Content script - runs on all pages
+// Content script - FAB integrated with TaskingBot Tasks
 
 // Create FAB element
 function createFAB() {
@@ -11,37 +11,114 @@ function createFAB() {
     right: 20px;
     width: 56px;
     height: 56px;
-    background: #4285f4;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 32px;
     cursor: pointer;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     z-index: 999999;
     transition: transform 0.2s, box-shadow 0.2s;
+    font-weight: 300;
   `;
   
   fab.addEventListener('mouseenter', () => {
-    fab.style.transform = 'scale(1.1)';
-    fab.style.boxShadow = '0 6px 12px rgba(0,0,0,0.4)';
+    fab.style.transform = 'scale(1.1) rotate(90deg)';
+    fab.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.6)';
   });
   
   fab.addEventListener('mouseleave', () => {
-    fab.style.transform = 'scale(1)';
-    fab.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+    fab.style.transform = 'scale(1) rotate(0deg)';
+    fab.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
   });
   
   fab.addEventListener('click', () => {
-    alert('FAB clicked! Add your action here.');
+    showTaskModal();
   });
   
   document.body.appendChild(fab);
 }
 
-// Wait for page to load
+// Create task modal
+function showTaskModal() {
+  const existingModal = document.getElementById('fab-task-modal');
+  if (existingModal) {
+    existingModal.remove();
+    return;
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'fab-task-modal';
+  modal.innerHTML = `
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999999;">
+      <div style="background: white; padding: 24px; border-radius: 12px; width: 400px; max-width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+        <h2 style="margin: 0 0 16px 0; color: #333; font-size: 20px;">Quick Task</h2>
+        <input type="text" id="fab-task-title" placeholder="Task title..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; margin-bottom: 12px; box-sizing: border-box;" />
+        <textarea id="fab-task-desc" placeholder="Description (optional)..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; margin-bottom: 16px; min-height: 80px; resize: vertical; box-sizing: border-box;"></textarea>
+        <div style="display: flex; gap: 8px;">
+          <button id="fab-cancel" style="flex: 1; padding: 12px; background: #f5f5f5; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Cancel</button>
+          <button id="fab-create" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Create Task</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  document.getElementById('fab-task-title').focus();
+  
+  document.getElementById('fab-cancel').addEventListener('click', () => modal.remove());
+  
+  document.getElementById('fab-create').addEventListener('click', () => {
+    const title = document.getElementById('fab-task-title').value.trim();
+    const desc = document.getElementById('fab-task-desc').value.trim();
+    
+    if (!title) {
+      alert('Please enter a task title');
+      return;
+    }
+    
+    chrome.runtime.sendMessage({
+      action: 'createTask',
+      title: title,
+      description: desc,
+      url: window.location.href,
+      pageTitle: document.title
+    }, (response) => {
+      if (response && response.success) {
+        modal.remove();
+        showNotification('✓ Task created!');
+      } else {
+        alert('Failed to create task');
+      }
+    });
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+}
+
+function showNotification(message) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `position: fixed; bottom: 90px; right: 20px; background: #4caf50; color: white; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 9999998; font-size: 14px;`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  setTimeout(() => notification.remove(), 3000);
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'toggleFab') {
+    const fab = document.getElementById('fab-button');
+    if (fab) {
+      fab.style.display = fab.style.display === 'none' ? 'flex' : 'none';
+      sendResponse({ visible: fab.style.display !== 'none' });
+    }
+  }
+});
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', createFAB);
 } else {
