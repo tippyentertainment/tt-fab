@@ -1,7 +1,10 @@
-// Content script - FAB integrated with TaskingBot Tasks
+// Content script - FAB with TaskingBot integration
 
-// Create FAB element
 function createFAB() {
+  // Remove existing FAB if present
+  const existingFAB = document.getElementById('fab-button');
+  if (existingFAB) existingFAB.remove();
+
   const fab = document.createElement('div');
   fab.id = 'fab-button';
   fab.innerHTML = '+';
@@ -23,6 +26,7 @@ function createFAB() {
     z-index: 999999;
     transition: transform 0.2s, box-shadow 0.2s;
     font-weight: 300;
+    user-select: none;
   `;
   
   fab.addEventListener('mouseenter', () => {
@@ -35,14 +39,15 @@ function createFAB() {
     fab.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
   });
   
-  fab.addEventListener('click', () => {
+  fab.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     showTaskModal();
   });
   
   document.body.appendChild(fab);
 }
 
-// Create task modal
 function showTaskModal() {
   const existingModal = document.getElementById('fab-task-modal');
   if (existingModal) {
@@ -67,9 +72,13 @@ function showTaskModal() {
   `;
   
   document.body.appendChild(modal);
-  document.getElementById('fab-task-title').focus();
   
-  document.getElementById('fab-cancel').addEventListener('click', () => modal.remove());
+  const titleInput = document.getElementById('fab-task-title');
+  titleInput.focus();
+  
+  document.getElementById('fab-cancel').addEventListener('click', () => {
+    modal.remove();
+  });
   
   document.getElementById('fab-create').addEventListener('click', () => {
     const title = document.getElementById('fab-task-title').value.trim();
@@ -80,6 +89,11 @@ function showTaskModal() {
       return;
     }
     
+    // Show loading state
+    const createBtn = document.getElementById('fab-create');
+    createBtn.textContent = 'Creating...';
+    createBtn.disabled = true;
+    
     chrome.runtime.sendMessage({
       action: 'createTask',
       title: title,
@@ -89,36 +103,66 @@ function showTaskModal() {
     }, (response) => {
       if (response && response.success) {
         modal.remove();
-        showNotification('✓ Task created!');
+        showNotification('✓ Task created successfully!');
       } else {
-        alert('Failed to create task');
+        createBtn.textContent = 'Create Task';
+        createBtn.disabled = false;
+        alert('Failed to create task: ' + (response?.error || 'Unknown error'));
       }
     });
   });
   
+  // Close on background click
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.remove();
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+  
+  // Close on Escape key
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape') {
+      modal.remove();
+      document.removeEventListener('keydown', escHandler);
+    }
   });
 }
 
 function showNotification(message) {
   const notification = document.createElement('div');
-  notification.style.cssText = `position: fixed; bottom: 90px; right: 20px; background: #4caf50; color: white; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 9999998; font-size: 14px;`;
+  notification.style.cssText = `
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    background: #4caf50;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 9999998;
+    font-size: 14px;
+    font-weight: 500;
+  `;
   notification.textContent = message;
   document.body.appendChild(notification);
   setTimeout(() => notification.remove(), 3000);
 }
 
+// Listen for toggle messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'toggleFab') {
     const fab = document.getElementById('fab-button');
     if (fab) {
       fab.style.display = fab.style.display === 'none' ? 'flex' : 'none';
       sendResponse({ visible: fab.style.display !== 'none' });
+    } else {
+      sendResponse({ visible: false });
     }
   }
+  return true;
 });
 
+// Initialize FAB
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', createFAB);
 } else {
