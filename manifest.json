@@ -1,18 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "TaskingBot FAB Extension",
-  "version": "1.0.0",
-  "description": "Floating Action Button Chrome Extension for TaskingBot integration",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "tabs",
-    "scripting"
-  ],
-  "host_permissions": [
-    "https://*/*",
-    "http://*/*"
-  ],
+  "name": "FAB Extension",
+  "version": "1.0",
+  "description": "Quick task creation for TaskingBot",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://tasking.tech/*"],
   "background": {
     "service_worker": "background.js"
   },
@@ -20,11 +12,15 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "run_at": "document_end"
+      "run_at": "document_idle"
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "TaskingBot FAB Extension"
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
   }
 }

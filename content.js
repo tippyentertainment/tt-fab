@@ -1,9 +1,13 @@
-// Content script - Simple FAB
+// Content script - Simple FAB that opens TaskingBot
 
-function createFAB() {
+(function() {
+  'use strict';
+  
+  // Remove existing FAB if present
   const existingFAB = document.getElementById('fab-button');
   if (existingFAB) existingFAB.remove();
 
+  // Create FAB
   const fab = document.createElement('div');
   fab.id = 'fab-button';
   fab.innerHTML = '+';
@@ -31,30 +35,12 @@ function createFAB() {
     const title = prompt('Enter task title:');
     if (title) {
       const desc = prompt('Enter description (optional):') || '';
+      const message = `Create task: ${title}\n\n${desc}\n\nSource: ${document.title}\nURL: ${window.location.href}`;
       
-      try {
-        chrome.runtime.sendMessage({
-          action: 'createTask',
-          title: title,
-          description: desc,
-          url: window.location.href,
-          pageTitle: document.title
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            // Fallback - just open TaskingBot
-            const message = encodeURIComponent(`Create task: ${title}\n\n${desc}\n\nSource: ${document.title}\nURL: ${window.location.href}`);
-            window.open(`https://tasking.tech?message=${message}`, '_blank');
-          }
-        });
-      } catch (error) {
-        // Fallback - just open TaskingBot
-        const message = encodeURIComponent(`Create task: ${title}\n\n${desc}\n\nSource: ${document.title}\nURL: ${window.location.href}`);
-        window.open(`https://tasking.tech?message=${message}`, '_blank');
-      }
+      // Open TaskingBot in new tab with message
+      window.open(`https://tasking.tech?message=${encodeURIComponent(message)}`, '_blank');
     }
   });
   
   document.body.appendChild(fab);
-}
-
-createFAB();
+})();
