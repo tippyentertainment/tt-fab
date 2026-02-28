@@ -18,8 +18,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request.payload)
     })
-    .then(r => r.json())
-    .then(data => sendResponse({ result: data }))
+    .then(async (r) => {
+      const text = await r.text();
+      try {
+        const data = JSON.parse(text);
+        sendResponse({ result: data });
+      } catch (parseErr) {
+        console.error('Background parse error, raw response:', text);
+        sendResponse({ error: 'Invalid JSON response: ' + parseErr.message + ' - ' + text });
+      }
+    })
     .catch(err => sendResponse({ error: err.message }));
     return true;
   }
