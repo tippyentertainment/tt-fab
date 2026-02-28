@@ -239,13 +239,14 @@ function addMessage(content, isUser, attachment = null) {
   // copy button for assistant replies
   if (!isUser) {
     const copyBtn = document.createElement('button');
-    copyBtn.textContent = 'Copy';
+    copyBtn.innerHTML = '📋';
     copyBtn.style.marginLeft = '8px';
-    copyBtn.style.fontSize = '12px';
+    copyBtn.style.fontSize = '14px';
     copyBtn.style.padding = '2px 6px';
     copyBtn.style.borderRadius = '4px';
     copyBtn.style.border = 'none';
     copyBtn.style.cursor = 'pointer';
+    copyBtn.title = 'Copy response';
     copyBtn.onclick = () => {
       navigator.clipboard.writeText(contentDiv.textContent);
     };
