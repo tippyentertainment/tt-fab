@@ -30,8 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (screenshotBtn) {
     screenshotBtn.addEventListener('click', async () => {
-      const dataUrl = await takeScreenshot();
-      if (dataUrl) showScreenshotPreview(dataUrl);
+      await captureScreenshot();
     });
   }
 
@@ -211,14 +210,15 @@ function hideTyping() {
   if (typing) typing.remove();
 }
 
-// Capture screenshot
+// Capture screenshot via background script
 async function captureScreenshot() {
   const response = await chrome.runtime.sendMessage({ action: 'captureScreenshot' });
-  if (response.success) {
-    currentScreenshot = response.dataUrl;
-    showScreenshotPreview(response.dataUrl);
+  if (response && response.screenshot) {
+    currentScreenshot = response.screenshot;
+    return response.screenshot;
   } else {
-    addMessage('Failed to capture screenshot: ' + response.error, false);
+    addMessage('Failed to capture screenshot', false);
+    return null;
   }
 }
 
