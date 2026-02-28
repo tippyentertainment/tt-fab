@@ -150,45 +150,53 @@ function createThumbnail(dataUrl, maxWidth = 200) {
 const chatContainer = document.getElementById('chat');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
-const screenshotBtn = document.getElementById('screenshotBtn');
 
+// TaskingBot avatar from tasking.tech
+const TASKINGBOT_AVATAR = 'https://tasking.tech/bot-avatar.png';
+const USER_AVATAR = 'https://tasking.tech/user-avatar.png'; // Default user avatar
 const API_URL = 'https://tasking.tech/api/chat';
 
+// Conversation history for continuous chat
 let conversationHistory = [];
+
+// Current screenshot/attachment data
 let currentScreenshot = null;
+let currentAttachment = null;
 
-// TaskingBot avatar
-const TASKINGBOT_AVATAR = 'icons/bot-avatar.png';
-
-function addMessage(content, isUser, hasScreenshot = false) {
+// Add message to chat with avatar
+function addMessage(content, isUser, attachment = null) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
   
-  // Add avatar for assistant
-  if (!isUser) {
-    const avatar = document.createElement('img');
-    avatar.src = TASKINGBOT_AVATAR;
-    avatar.className = 'avatar';
-    avatar.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; object-fit: cover; box-shadow: 0 0 0 3px #FF6B00; background: #0d0d0d;';
-    messageDiv.appendChild(avatar);
+  // Avatar
+  const avatar = document.createElement('img');
+  avatar.src = isUser ? USER_AVATAR : TASKINGBOT_AVATAR;
+  avatar.className = 'avatar';
+  avatar.alt = isUser ? 'You' : 'TaskingBot';
+  
+  // Content
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'message-content';
+  contentDiv.textContent = content;
+  
+  // Attachment thumbnail
+  if (attachment) {
+    const thumb = document.createElement('img');
+    thumb.src = attachment.dataUrl;
+    thumb.className = 'attachment-thumb';
+    thumb.style.maxWidth = '200px';
+    thumb.style.borderRadius = '8px';
+    thumb.style.marginTop = '8px';
+    contentDiv.appendChild(thumb);
   }
   
-  const textDiv = document.createElement('div');
-  textDiv.className = 'message-text';
-  textDiv.textContent = content;
-  messageDiv.appendChild(textDiv);
-  
-  if (hasScreenshot) {
-    const indicator = document.createElement('div');
-    indicator.className = 'screenshot-indicator';
-    indicator.textContent = '📸 Screenshot attached';
-    messageDiv.appendChild(indicator);
-  }
-  
+  messageDiv.appendChild(avatar);
+  messageDiv.appendChild(contentDiv);
   chatContainer.appendChild(messageDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+// Show typing indicator
 function showTyping() {
   const typingDiv = document.createElement('div');
   typingDiv.className = 'typing-indicator';
@@ -198,42 +206,97 @@ function showTyping() {
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+// Hide typing indicator
 function hideTyping() {
   const typing = document.getElementById('typing');
   if (typing) typing.remove();
 }
 
+// Capture screenshot
 async function captureScreenshot() {
-  try {
-    // Request screenshot via background script
-    const response = await chrome.runtime.sendMessage({ action: 'captureScreenshot' });
-    
-    if (response && response.screenshot) {
-      currentScreenshot = response.screenshot;
-      
-      // Show preview
-      const preview = document.getElementById('screenshotPreview');
-      if (preview) {
-        preview.innerHTML = `<img src="${response.screenshot}" style="max-width: 100%; border-radius: 8px;" />`;
-        preview.style.display = 'block';
-      }
-      
-      addMessage('Screenshot captured! Ask me anything about it.', false);
-    } else {
-      addMessage('Screenshot failed. Please try again.', false);
-    }
-  } catch (error) {
-    console.error('Screenshot failed:', error);
-    addMessage('Screenshot permission denied. Please allow screen capture in extension settings.', false);
+  const response = await chrome.runtime.sendMessage({ action: 'captureScreenshot' });
+  if (response.success) {
+    currentScreenshot = response.dataUrl;
+    showScreenshotPreview(response.dataUrl);
+  } else {
+    addMessage('Failed to capture screenshot: ' + response.error, false);
   }
 }
 
-async function sendMessage() {
+// Show screenshot preview before sending
+function showScreenshotPreview(dataUrl) {
+  const preview = document.getElementById('screenshotPreview');
+  if (preview) {
+    preview.innerHTML = `<img src="${dataUrl}" style="max-width: 100%; border-radius: 8px;" />
+      <button id="sendScreenshot">Send</button>
+      <button id="cancelScreenshot">Cancel</button>`;
+    preview.style.display = 'block';
+    
+    document.getElementById('sendScreenshot').onclick = () => {
+      sendMessageWithAttachment(dataUrl);
+      preview.style.display = 'none';
+    };
+    document.getElementById('cancelScreenshot').onclick = () => {
+      currentScreenshot = null;
+      preview.style.display = 'none';
+    };
+  }
+}
+
+// Handle file attachment
+function handleAttachment(event) {
+  const file = event.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      currentAttachment = e.target.result;
+      showAttachmentPreview(e.target.result, file.name);
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+// Show attachment preview
+function showAttachmentPreview(dataUrl, fileName) {
+  const preview = document.getElementById('attachmentPreview');
+  if (preview) {
+    if (dataUrl.startsWith('data:image')) {
+      preview.innerHTML = `<img src="${dataUrl}" style="max-width: 100px; border-radius: 8px;" />
+        <span>${fileName}</span>
+        <button id="sendAttachment">Send</button>
+        <button id="cancelAttachment">Cancel</button>`;
+    } else {
+      preview.innerHTML = `<span>📎 ${fileName}</span>
+        <button id="sendAttachment">Send</button>
+        <button id="cancelAttachment">Cancel</button>`;
+    }
+    preview.style.display = 'block';
+    
+    document.getElementById('sendAttachment').onclick = () => {
+      sendMessageWithAttachment(dataUrl, fileName);
+      preview.style.display = 'none';
+    };
+    document.getElementById('cancelAttachment').onclick = () => {
+      currentAttachment = null;
+      preview.style.display = 'none';
+    };
+  }
+}
+
+// Send message with optional attachment
+async function sendMessageWithAttachment(dataUrl = null, fileName = null) {
   const message = messageInput.value.trim();
-  if (!message && !currentScreenshot) return;
+  if (!message && !dataUrl) return;
   
-  addMessage(message || 'Analyze this screenshot', true, !!currentScreenshot);
+  // Add user message to chat
+  addMessage(message || 'Sent an attachment', true, dataUrl ? { dataUrl, fileName } : null);
+  
+  // Add to conversation history
+  conversationHistory.push({ role: 'user', content: message });
+  
   messageInput.value = '';
+  currentScreenshot = null;
+  currentAttachment = null;
   
   showTyping();
   
@@ -244,42 +307,51 @@ async function sendMessage() {
       body: JSON.stringify({
         message,
         history: conversationHistory,
-        screenshot: currentScreenshot
+        screenshot: dataUrl,
+        attachment: currentAttachment
       })
     });
     
     const data = await response.json();
     hideTyping();
     
-    if (data.success) {
-      addMessage(data.response, false);
-      conversationHistory.push(
-        { role: 'user', content: message },
-        { role: 'assistant', content: data.response }
-      );
-    } else {
-      addMessage(`Error: ${data.error}`, false);
-    }
+    // Add assistant response
+    addMessage(data.response || 'Sorry, I encountered an error.', false);
     
-    currentScreenshot = null;
-    const preview = document.getElementById('screenshotPreview');
-    if (preview) preview.style.display = 'none';
-    
+    // Add to conversation history
+    conversationHistory.push({ role: 'assistant', content: data.response });
   } catch (error) {
     hideTyping();
     addMessage('Sorry, I couldn\'t connect to the server.', false);
   }
 }
 
-// Screenshot button
-if (screenshotBtn) {
-  screenshotBtn.addEventListener('click', captureScreenshot);
+// Send message (regular)
+async function sendMessage() {
+  await sendMessageWithAttachment();
 }
 
+// Event listeners
 sendButton.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') sendMessage();
 });
 
-// Initial greeting
-addMessage('Hello! I\'m TaskingBot. I can help you with tasks, answer questions, and analyze screenshots. Click the camera button to share your screen!', false);
+// Screenshot button (if exists)
+const screenshotBtn = document.getElementById('screenshotBtn');
+if (screenshotBtn) {
+  screenshotBtn.addEventListener('click', captureScreenshot);
+}
+
+// Attachment input (if exists)
+const attachmentInput = document.getElementById('attachmentInput');
+if (attachmentInput) {
+  attachmentInput.addEventListener('change', handleAttachment);
+}
+
+// Keyboard shortcut for screenshot (Ctrl+Shift+S)
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+    captureScreenshot();
+  }
+});
