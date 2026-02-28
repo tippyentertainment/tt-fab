@@ -13,7 +13,7 @@
     
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      background: #0d0d0d;
       color: #fff;
       min-height: 100vh;
       display: flex;
@@ -22,23 +22,22 @@
     
     .header {
       padding: 16px 20px;
-      background: rgba(255, 255, 255, 0.05);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
       display: flex;
       align-items: center;
       gap: 12px;
     }
-    
+
     .logo {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      width: 40px;
+      height: 40px;
       border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: bold;
-      font-size: 18px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     
     .title {
@@ -63,15 +62,18 @@
     }
     
     .message.user {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(90deg, #FF6B00 0%, #FF8C00 100%);
+      color: #fff;
       align-self: flex-end;
       border-bottom-right-radius: 4px;
     }
-    
+
     .message.assistant {
-      background: rgba(255, 255, 255, 0.1);
+      background: #1a1a1a;
+      color: #e0e0e0;
       align-self: flex-start;
       border-bottom-left-radius: 4px;
+      border: 1px solid #2a2a2a;
     }
     
     .input-container {
@@ -88,8 +90,8 @@
     
     .message-input {
       flex: 1;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: #0d0d0d;
+      border: 1px solid #2a2a2a;
       border-radius: 24px;
       padding: 12px 20px;
       color: #fff;
@@ -102,15 +104,15 @@
     }
     
     .message-input:focus {
-      border-color: #667eea;
-      background: rgba(255, 255, 255, 0.15);
+      border-color: #FF6B00;
+      background: #181818;
     }
     
     .send-button {
       width: 44px;
       height: 44px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(90deg, #FF6B00 0%, #FF8C00 100%);
       border: none;
       cursor: pointer;
       display: flex;
@@ -118,10 +120,10 @@
       justify-content: center;
       transition: transform 0.2s, box-shadow 0.2s;
     }
-    
+
     .send-button:hover {
       transform: scale(1.05);
-      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 20px rgba(255, 107, 0, 0.3);
     }
     
     .send-button svg {
@@ -158,7 +160,7 @@
 </head>
 <body>
   <div class="header">
-    <div class="logo">T</div>
+    <div class="logo"><img src="https://tasking.tech/logo.png" alt="TaskingBot Logo" style="width:32px;height:32px;border-radius:6px;" /></div>
     <div class="title">TaskingBot AI</div>
   </div>
   
