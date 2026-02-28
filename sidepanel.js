@@ -128,23 +128,31 @@ async function getUserInfo() {
 // Send message to AI
 async function sendToAI(message, screenshotData = null) {
   const userInfo = await getUserInfo();
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      history: conversationHistory,
-      screenshot: screenshotData,
-      userId: userInfo.userId
-    })
-  });
-  const data = await response.json();
-  // Update conversation history
-  conversationHistory.push(
-    { role: 'user', content: message },
-    { role: 'assistant', content: data.response }
-  );
-  return data.response;
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        history: conversationHistory,
+        screenshot: screenshotData,
+        userId: userInfo.userId
+      })
+    });
+    if (!response.ok) {
+      console.error('API responded with', response.status, response.statusText);
+      throw new Error('Server returned ' + response.status);
+    }
+    const data = await response.json();
+    conversationHistory.push(
+      { role: 'user', content: message },
+      { role: 'assistant', content: data.response }
+    );
+    return data.response;
+  } catch (err) {
+    console.error('sendToAI error', err);
+    throw err;
+  }
 }
 
 // Take screenshot
@@ -343,7 +351,8 @@ async function sendMessageWithAttachment(dataUrl = null, fileName = null) {
     conversationHistory.push({ role: 'assistant', content: reply });
   } catch (error) {
     hideTyping();
-    addMessage('Sorry, I couldn\'t connect to the server.', false);
+    console.error('sendMessageWithAttachment error', error);
+    addMessage('Sorry, I couldn\'t connect to the server: ' + (error.message || ''), false);
   }
 }
 
