@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'sendToAI') {
     // forward to TaskingBot endpoint
     console.log('background: sending to AI', request.payload);
-    fetch('https://tasking.tech/api/chat', {
+    fetch('https://tasking.tech/taskingbot/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request.payload)
