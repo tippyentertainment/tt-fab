@@ -128,31 +128,30 @@ async function getUserInfo() {
 // Send message to AI
 async function sendToAI(message, screenshotData = null) {
   const userInfo = await getUserInfo();
-  try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({
+      action: 'sendToAI',
+      payload: {
         message,
         history: conversationHistory,
         screenshot: screenshotData,
         userId: userInfo.userId
-      })
+      }
+    }, (response) => {
+      if (response && response.result) {
+        const data = response.result;
+        conversationHistory.push(
+          { role: 'user', content: message },
+          { role: 'assistant', content: data.response }
+        );
+        resolve(data.response);
+      } else {
+        const err = response && response.error ? new Error(response.error) : new Error('no response');
+        console.error('sendToAI background error', err);
+        reject(err);
+      }
     });
-    if (!response.ok) {
-      console.error('API responded with', response.status, response.statusText);
-      throw new Error('Server returned ' + response.status);
-    }
-    const data = await response.json();
-    conversationHistory.push(
-      { role: 'user', content: message },
-      { role: 'assistant', content: data.response }
-    );
-    return data.response;
-  } catch (err) {
-    console.error('sendToAI error', err);
-    throw err;
-  }
+  });
 }
 
 // Take screenshot
