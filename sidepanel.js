@@ -1,6 +1,152 @@
-// TaskingBot FAB - Sidepanel Script
-// Handles chat, screenshots, attachments, and communication with tasking.tech
+// === AI/chat/screenshot/screen share utility functions (no UI changes) ===
+// Get user info from storage
+async function getUserInfo() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['userId', 'userAvatar'], (result) => {
+      resolve({
+        userId: result.userId || 'anonymous',
+        userAvatar: result.userAvatar || null
+      });
+    });
+  });
+}
 
+// Send message to AI
+async function sendToAI(message, screenshotData = null) {
+  const userInfo = await getUserInfo();
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      history: conversationHistory,
+      screenshot: screenshotData,
+      userId: userInfo.userId
+    })
+  });
+  const data = await response.json();
+  // Update conversation history
+  conversationHistory.push(
+    { role: 'user', content: message },
+    { role: 'assistant', content: data.response }
+  );
+  return data.response;
+}
+
+// Take screenshot
+async function takeScreenshot() {
+  return new Promise((resolve) => {
+    chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+      resolve(dataUrl);
+    });
+  });
+}
+
+// Request screenshare permission
+async function requestScreenShare() {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true
+    });
+    return stream;
+  } catch (err) {
+    console.error('Screen share denied:', err);
+    return null;
+  }
+}
+
+// Create thumbnail for attachment
+function createThumbnail(dataUrl, maxWidth = 200) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scale = maxWidth / img.width;
+      canvas.width = maxWidth;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.src = dataUrl;
+  });
+}
+// === AI/chat/screenshot/screen share utility functions ===
+const API_URL = 'https://tasking.tech/api/chat';
+let conversationHistory = [];
+
+// Get user info from storage
+async function getUserInfo() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['userId', 'userAvatar'], (result) => {
+      resolve({
+        userId: result.userId || 'anonymous',
+        userAvatar: result.userAvatar || null
+      });
+    });
+  });
+}
+
+// Send message to AI
+async function sendToAI(message, screenshotData = null) {
+  const userInfo = await getUserInfo();
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      history: conversationHistory,
+      screenshot: screenshotData,
+      userId: userInfo.userId
+    })
+  });
+  const data = await response.json();
+  // Update conversation history
+  conversationHistory.push(
+    { role: 'user', content: message },
+    { role: 'assistant', content: data.response }
+  );
+  return data.response;
+}
+
+// Take screenshot
+async function takeScreenshot() {
+  return new Promise((resolve) => {
+    chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+      resolve(dataUrl);
+    });
+  });
+}
+
+// Request screenshare permission
+async function requestScreenShare() {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true
+    });
+    return stream;
+  } catch (err) {
+    console.error('Screen share denied:', err);
+    return null;
+  }
+}
+
+// Create thumbnail for attachment
+function createThumbnail(dataUrl, maxWidth = 200) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scale = maxWidth / img.width;
+      canvas.width = maxWidth;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.src = dataUrl;
+  });
+}
 const chatContainer = document.getElementById('chat');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
