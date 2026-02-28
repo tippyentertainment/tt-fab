@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "TaskingBot FAB",
+  "name": "TaskingBot AI Assistant",
   "version": "1.0",
   "description": "AI assistant floating action button",
   "permissions": [
