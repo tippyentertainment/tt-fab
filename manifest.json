@@ -3,7 +3,7 @@
   "name": "TaskingBot",
   "version": "1.0",
   "description": "AI assistant floating action button",
-  "permissions": ["activeTab", "sidePanel"],
+  "permissions": ["activeTab", "sidePanel", "tabs"],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
