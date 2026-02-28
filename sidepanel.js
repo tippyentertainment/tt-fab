@@ -7,7 +7,27 @@ const API_URL = 'https://tasking.tech/api/chat';
 function addMessage(content, isUser) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-  messageDiv.textContent = content;
+  if (isUser) {
+    // User avatar
+    const avatar = document.createElement('img');
+    avatar.src = 'https://tasking.tech/avatar.png';
+    avatar.alt = 'User Avatar';
+    avatar.className = 'avatar';
+    messageDiv.appendChild(avatar);
+    const span = document.createElement('span');
+    span.textContent = content;
+    messageDiv.appendChild(span);
+  } else {
+    // Bot avatar (logo)
+    const avatar = document.createElement('img');
+    avatar.src = 'https://tasking.tech/logo.png';
+    avatar.alt = 'Bot Avatar';
+    avatar.className = 'avatar';
+    messageDiv.appendChild(avatar);
+    const span = document.createElement('span');
+    span.textContent = content;
+    messageDiv.appendChild(span);
+  }
   chatContainer.appendChild(messageDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
