@@ -30,7 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (screenshotBtn) {
     screenshotBtn.addEventListener('click', async () => {
-      await captureScreenshot();
+      const dataUrl = await captureScreenshot();
+      if (dataUrl) {
+        showScreenshotPreview(dataUrl);
+        // automatically send to AI
+        await sendMessageWithAttachment(dataUrl);
+      }
     });
   }
 
