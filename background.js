@@ -14,12 +14,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'sendToAI') {
     console.log('background: sending to AI', request.payload);
     const base = 'https://tasking.tech';
+    // Try the correct endpoint first, then fallbacks
     const candidates = [
-      '/taskingbot/api/chat',
-      '/api/chat',
-      '/taskingbot',
-      '/api/taskingbot/chat',
-      '/taskingbot/chat'
+      '/api/chat',           // Primary endpoint (public, no auth)
+      '/api/ai/chat',        // Secondary (may require auth)
+      '/taskingbot/api/chat' // Legacy fallback
     ];
     (async function tryPaths(idx) {
       if (idx >= candidates.length) {
