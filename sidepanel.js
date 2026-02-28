@@ -1,60 +1,41 @@
 const chatContainer = document.getElementById('chat');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
+const screenshotBtn = document.getElementById('screenshotBtn');
 
 const API_URL = 'https://tasking.tech/api/chat';
 
-function addMessage(content, isUser) {
+let conversationHistory = [];
+let currentScreenshot = null;
+
+// TaskingBot avatar
+const TASKINGBOT_AVATAR = 'https://tasking.tech/_api/r2/users/4/generated/1772126543966-3wcgtkr3.png';
+
+function addMessage(content, isUser, hasScreenshot = false) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-  let avatar, span;
-  if (isUser) {
-    avatar = document.createElement('img');
-    avatar.src = 'https://tasking.tech/avatar.png';
-    avatar.alt = 'User Avatar';
+  
+  // Add avatar for assistant
+  if (!isUser) {
+    const avatar = document.createElement('img');
+    avatar.src = TASKINGBOT_AVATAR;
     avatar.className = 'avatar';
+    avatar.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; object-fit: cover;';
     messageDiv.appendChild(avatar);
-    span = document.createElement('span');
-    span.textContent = content;
-    messageDiv.appendChild(span);
-  } else {
-    avatar = document.createElement('img');
-    avatar.src = 'https://tasking.tech/logo.png';
-    avatar.alt = 'Bot Avatar';
-    avatar.className = 'avatar';
-    messageDiv.appendChild(avatar);
-    // Check for image URLs in content
-    const urlRegex = /(https?:\/\/(?:[\w-]+\.)+[\w-]+(?:\/[\w\-._~:/?#[\]@!$&'()*+,;=]*)?\.(?:png|jpg|jpeg|gif|webp|bmp|svg))/gi;
-    let match, lastIndex = 0;
-    while ((match = urlRegex.exec(content)) !== null) {
-      // Text before image
-      if (match.index > lastIndex) {
-        const textPart = content.substring(lastIndex, match.index);
-        if (textPart.trim()) {
-          const textSpan = document.createElement('span');
-          textSpan.textContent = textPart;
-          messageDiv.appendChild(textSpan);
-        }
-      }
-      // Image
-      const img = document.createElement('img');
-      img.src = match[1];
-      img.alt = 'Bot Attachment';
-      img.style.maxWidth = '180px';
-      img.style.maxHeight = '120px';
-      img.style.margin = '8px 0';
-      img.style.borderRadius = '8px';
-      img.style.display = 'block';
-      messageDiv.appendChild(img);
-      lastIndex = urlRegex.lastIndex;
-    }
-    // Any remaining text after last image
-    if (lastIndex < content.length) {
-      const textSpan = document.createElement('span');
-      textSpan.textContent = content.substring(lastIndex);
-      messageDiv.appendChild(textSpan);
-    }
   }
+  
+  const textDiv = document.createElement('div');
+  textDiv.className = 'message-text';
+  textDiv.textContent = content;
+  messageDiv.appendChild(textDiv);
+  
+  if (hasScreenshot) {
+    const indicator = document.createElement('div');
+    indicator.className = 'screenshot-indicator';
+    indicator.textContent = '📸 Screenshot attached';
+    messageDiv.appendChild(indicator);
+  }
+  
   chatContainer.appendChild(messageDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
@@ -73,11 +54,38 @@ function hideTyping() {
   if (typing) typing.remove();
 }
 
+async function captureScreenshot() {
+  try {
+    // Request permission and capture visible tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    const screenshotUrl = await chrome.tabs.captureVisibleTab(null, {
+      format: 'png',
+      quality: 90
+    });
+    
+    currentScreenshot = screenshotUrl;
+    
+    // Show preview
+    const preview = document.getElementById('screenshotPreview');
+    if (preview) {
+      preview.innerHTML = `<img src="${screenshotUrl}" style="max-width: 100%; border-radius: 8px;" />`;
+      preview.style.display = 'block';
+    }
+    
+    return screenshotUrl;
+  } catch (error) {
+    console.error('Screenshot failed:', error);
+    addMessage('Screenshot permission denied. Please allow screen capture in extension settings.', false);
+    return null;
+  }
+}
+
 async function sendMessage() {
   const message = messageInput.value.trim();
-  if (!message) return;
+  if (!message && !currentScreenshot) return;
   
-  addMessage(message, true);
+  addMessage(message || 'Analyze this screenshot', true, !!currentScreenshot);
   messageInput.value = '';
   
   showTyping();
@@ -86,19 +94,45 @@ async function sendMessage() {
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({
+        message,
+        history: conversationHistory,
+        screenshot: currentScreenshot
+      })
     });
     
     const data = await response.json();
     hideTyping();
-    addMessage(data.response || 'Sorry, I encountered an error.', false);
+    
+    if (data.success) {
+      addMessage(data.response, false);
+      conversationHistory.push(
+        { role: 'user', content: message },
+        { role: 'assistant', content: data.response }
+      );
+    } else {
+      addMessage(`Error: ${data.error}`, false);
+    }
+    
+    currentScreenshot = null;
+    const preview = document.getElementById('screenshotPreview');
+    if (preview) preview.style.display = 'none';
+    
   } catch (error) {
     hideTyping();
     addMessage('Sorry, I couldn\'t connect to the server.', false);
   }
 }
 
+// Screenshot button
+if (screenshotBtn) {
+  screenshotBtn.addEventListener('click', captureScreenshot);
+}
+
 sendButton.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') sendMessage();
 });
+
+// Initial greeting
+addMessage('Hello! I\'m TaskingBot. I can help you with tasks, answer questions, and analyze screenshots. Click the camera button to share your screen!', false);
