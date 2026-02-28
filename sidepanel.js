@@ -194,7 +194,7 @@ function createThumbnail(dataUrl, maxWidth = 200) {
 }
 
 // TaskingBot avatar from tasking.tech
-const TASKINGBOT_AVATAR = chrome.runtime.getURL('icons/bot-avatar.png');
+const TASKINGBOT_AVATAR = chrome.runtime.getURL('icons/taskingbot.png');
 const USER_AVATAR = chrome.runtime.getURL('icons/user-icon.png'); // Default user avatar
 const API_URL = 'https://tasking.tech/taskingbot/api/chat';
 
@@ -215,6 +215,10 @@ function addMessage(content, isUser, attachment = null) {
   avatar.src = isUser ? USER_AVATAR : TASKINGBOT_AVATAR;
   avatar.className = 'avatar';
   avatar.alt = isUser ? 'You' : 'TaskingBot';
+  // if specified avatar file missing, fall back to default icon
+  avatar.onerror = () => {
+    avatar.src = chrome.runtime.getURL('icons/icon128.png');
+  };
   
   // Content
   const contentDiv = document.createElement('div');
