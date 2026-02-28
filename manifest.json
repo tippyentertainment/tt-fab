@@ -1,27 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "FAB Extension",
-  "version": "1.0",
-  "description": "Quick task creation for TaskingBot",
-  "permissions": ["activeTab", "storage"],
-  "host_permissions": ["https://tasking.tech/*"],
+  "name": "TaskingBot FAB",
+  "version": "2.0",
+  "description": "Quick task creation for TaskingBot with chat interface",
+  "permissions": ["activeTab", "storage", "clipboardRead", "clipboardWrite", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "css": ["styles.css"],
+    "run_at": "document_end"
+  }],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "https://tasking.tech/logo.png",
+      "48": "https://tasking.tech/logo.png",
+      "128": "https://tasking.tech/logo.png"
     }
+  },
+  "icons": {
+    "16": "https://tasking.tech/logo.png",
+    "48": "https://tasking.tech/logo.png",
+    "128": "https://tasking.tech/logo.png"
   }
 }
