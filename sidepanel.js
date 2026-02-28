@@ -36,7 +36,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (screenShareBtn) {
     screenShareBtn.addEventListener('click', async () => {
-      console.log('Screen share button clicked');
+      const stream = await requestScreenShare();
+      if (stream) {
+        // create video preview
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.muted = true;
+        video.style.maxWidth = '220px';
+        video.style.maxHeight = '140px';
+        video.style.margin = '10px 0';
+        video.style.borderRadius = '10px';
+        video.style.display = 'block';
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        const avatar = document.createElement('img');
+        avatar.src = TASKINGBOT_AVATAR;
+        avatar.className = 'avatar';
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(video);
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      } else {
+        addMessage('Screen share permission denied or failed.', false);
+      }
     });
   }
 
