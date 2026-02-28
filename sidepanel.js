@@ -328,25 +328,10 @@ async function sendMessageWithAttachment(dataUrl = null, fileName = null) {
   showTyping();
   
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        history: conversationHistory,
-        screenshot: dataUrl,
-        attachment: currentAttachment
-      })
-    });
-    
-    const data = await response.json();
+    const reply = await sendToAI(message, dataUrl);
     hideTyping();
-    
-    // Add assistant response
-    addMessage(data.response || 'Sorry, I encountered an error.', false);
-    
-    // Add to conversation history
-    conversationHistory.push({ role: 'assistant', content: data.response });
+    addMessage(reply || 'Sorry, I encountered an error.', false);
+    conversationHistory.push({ role: 'assistant', content: reply });
   } catch (error) {
     hideTyping();
     addMessage('Sorry, I couldn\'t connect to the server.', false);
