@@ -3,11 +3,13 @@ console.log('sidepanel.js loaded');
 
 // === EVENT HANDLERS INIT ===
 document.addEventListener('DOMContentLoaded', () => {
-  const messageInput = document.getElementById('messageInput');
-  const sendBtn = document.getElementById('sendButton');
-  const screenshotBtn = document.getElementById('sidebar-screenshot');
-  const screenShareBtn = document.getElementById('sidebar-share-screen');
-  const attachBtn = document.getElementById('sidebar-attach');
+  // element references
+  chatContainer = document.getElementById('chat');
+  messageInput = document.getElementById('messageInput');
+  sendBtn = document.getElementById('sendButton');
+  screenshotBtn = document.getElementById('sidebar-screenshot');
+  screenShareBtn = document.getElementById('sidebar-share-screen');
+  attachBtn = document.getElementById('sidebar-attach');
 
   if (messageInput) {
     messageInput.addEventListener('keydown', (e) => {
@@ -61,6 +63,13 @@ document.addEventListener('DOMContentLoaded', () => {
         showAttachmentPreview(evt.target.result, file.name);
       };
       reader.readAsDataURL(file);
+    }
+  });
+
+  // Keyboard shortcut for screenshot (Ctrl+Shift+S)
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+      takeScreenshot();
     }
   });
 });
@@ -138,9 +147,6 @@ function createThumbnail(dataUrl, maxWidth = 200) {
     img.src = dataUrl;
   });
 }
-const chatContainer = document.getElementById('chat');
-const messageInput = document.getElementById('messageInput');
-const sendButton = document.getElementById('sendButton');
 
 // TaskingBot avatar from tasking.tech
 const TASKINGBOT_AVATAR = 'https://tasking.tech/bot-avatar.png';
@@ -322,27 +328,3 @@ async function sendMessage() {
   await sendMessageWithAttachment();
 }
 
-// Event listeners
-sendButton.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') sendMessage();
-});
-
-// Screenshot button (if exists)
-const screenshotBtn = document.getElementById('screenshotBtn');
-if (screenshotBtn) {
-  screenshotBtn.addEventListener('click', captureScreenshot);
-}
-
-// Attachment input (if exists)
-const attachmentInput = document.getElementById('attachmentInput');
-if (attachmentInput) {
-  attachmentInput.addEventListener('change', handleAttachment);
-}
-
-// Keyboard shortcut for screenshot (Ctrl+Shift+S)
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'S') {
-    captureScreenshot();
-  }
-});
