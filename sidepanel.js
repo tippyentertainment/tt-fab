@@ -110,6 +110,23 @@ document.addEventListener('DOMContentLoaded', () => {
       takeScreenshot();
     }
   });
+
+  // Toggle bot on/off
+  const botToggle = document.getElementById('botToggle');
+  const botDisabledMsg = document.getElementById('botDisabledMsg');
+  if (botToggle) {
+    botToggle.addEventListener('change', function() {
+      if (this.checked) {
+        chatContainer.style.display = '';
+        document.getElementById('inputContainer').style.display = '';
+        botDisabledMsg.style.display = 'none';
+      } else {
+        chatContainer.style.display = 'none';
+        document.getElementById('inputContainer').style.display = 'none';
+        botDisabledMsg.style.display = '';
+      }
+    });
+  }
 });
 
 // === AI/chat/screenshot/screen share utility functions (no UI changes) ===

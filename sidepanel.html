@@ -223,23 +223,5 @@
   <div id="screenshotPreview" style="display:none; padding: 16px;"></div>
   <div id="attachmentPreview" style="display:none; padding: 16px;"></div>
   <script src="sidepanel.js"></script>
-  <script>
-    // Toggle bot on/off
-    const botToggle = document.getElementById('botToggle');
-    const chat = document.getElementById('chat');
-    const inputContainer = document.getElementById('inputContainer');
-    const botDisabledMsg = document.getElementById('botDisabledMsg');
-    botToggle.addEventListener('change', function() {
-      if (this.checked) {
-        chat.style.display = '';
-        inputContainer.style.display = '';
-        botDisabledMsg.style.display = 'none';
-      } else {
-        chat.style.display = 'none';
-        inputContainer.style.display = 'none';
-        botDisabledMsg.style.display = '';
-      }
-    });
-  </script>
 </body>
 </html>

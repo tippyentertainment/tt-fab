@@ -16,8 +16,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const base = 'https://tasking.tech';
     // Try the correct endpoint first, then fallbacks
     const candidates = [
-      '/api/chat',           // Primary endpoint (public, no auth)
-      '/api/ai/chat',        // Secondary (may require auth)
+      '/api/bridge',         // Primary endpoint (Chrome extension bridge)
+      '/api/chat',           // Public chat endpoint (no auth)
       '/taskingbot/api/chat' // Legacy fallback
     ];
     (async function tryPaths(idx) {
