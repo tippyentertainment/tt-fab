@@ -1,3 +1,72 @@
+// === EVENT HANDLERS INIT (unified, no CSS/UI changes) ===
+document.addEventListener('DOMContentLoaded', () => {
+  const messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendButton');
+  const screenshotBtn = document.getElementById('sidebar-screenshot');
+  const screenShareBtn = document.getElementById('sidebar-share-screen');
+  const attachBtn = document.getElementById('sidebar-attach');
+
+  // Send message on Enter, allow Shift+Enter for newline
+  messageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  // Send message on button click
+  sendBtn.addEventListener('click', async () => {
+    await sendMessage();
+  });
+
+  // Screenshot button
+  if (screenshotBtn) {
+    screenshotBtn.addEventListener('click', async () => {
+      const dataUrl = await takeScreenshot();
+      if (dataUrl) {
+        showScreenshotPreview(dataUrl);
+      }
+    });
+  }
+
+  // Screen share button
+  if (screenShareBtn) {
+    screenShareBtn.addEventListener('click', async () => {
+      // The modal and stream logic is handled in HTML inline script, so just log for now
+      console.log('Screen share button clicked');
+    });
+  }
+
+  // Attach button (creates file input on click)
+  if (attachBtn) {
+    attachBtn.addEventListener('click', () => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*,.pdf,.txt,.doc,.docx';
+      fileInput.onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          // Show file name in chat (simulate upload)
+          addMessage(`[Attached: ${file.name}]`, true);
+          addMessage(`File "${file.name}" attached. I can process it once the API is connected.`, false);
+        }
+      };
+      fileInput.click();
+    });
+  }
+
+  // Clipboard paste for files
+  document.addEventListener('paste', (e) => {
+    if (e.clipboardData && e.clipboardData.files.length > 0) {
+      const file = e.clipboardData.files[0];
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        showAttachmentPreview(evt.target.result, file.name);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+});
 // === EVENT HANDLERS INIT ===
 document.addEventListener('DOMContentLoaded', () => {
   const messageInput = document.getElementById('messageInput');
