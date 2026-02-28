@@ -235,6 +235,23 @@ function addMessage(content, isUser, attachment = null) {
   
   messageDiv.appendChild(avatar);
   messageDiv.appendChild(contentDiv);
+
+  // copy button for assistant replies
+  if (!isUser) {
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy';
+    copyBtn.style.marginLeft = '8px';
+    copyBtn.style.fontSize = '12px';
+    copyBtn.style.padding = '2px 6px';
+    copyBtn.style.borderRadius = '4px';
+    copyBtn.style.border = 'none';
+    copyBtn.style.cursor = 'pointer';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(contentDiv.textContent);
+    };
+    messageDiv.appendChild(copyBtn);
+  }
+
   chatContainer.appendChild(messageDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
