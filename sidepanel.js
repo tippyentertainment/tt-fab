@@ -1,3 +1,63 @@
+// === EVENT HANDLERS INIT ===
+document.addEventListener('DOMContentLoaded', () => {
+  const messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendButton');
+  const screenshotBtn = document.getElementById('sidebar-screenshot');
+  const screenShareBtn = document.getElementById('sidebar-share-screen');
+  const attachBtn = document.getElementById('attachmentInput');
+
+  // Send message on Enter, allow Shift+Enter for newline
+  messageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  // Send message on button click
+  sendBtn.addEventListener('click', async () => {
+    await sendMessage();
+  });
+
+  // Screenshot button
+  if (screenshotBtn) {
+    screenshotBtn.addEventListener('click', async () => {
+      const dataUrl = await takeScreenshot();
+      if (dataUrl) {
+        showScreenshotPreview(dataUrl);
+      }
+    });
+  }
+
+  // Screen share button
+  if (screenShareBtn) {
+    screenShareBtn.addEventListener('click', async () => {
+      const stream = await requestScreenShare();
+      if (stream) {
+        // You can display the stream in a video element if desired
+        // For now, just log it
+        console.log('Screen share stream:', stream);
+      }
+    });
+  }
+
+  // Attachment input
+  if (attachBtn) {
+    attachBtn.addEventListener('change', handleAttachment);
+  }
+
+  // Clipboard paste
+  document.addEventListener('paste', (e) => {
+    if (e.clipboardData && e.clipboardData.files.length > 0) {
+      const file = e.clipboardData.files[0];
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        showAttachmentPreview(evt.target.result, file.name);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+});
 // === AI/chat/screenshot/screen share utility functions (no UI changes) ===
 // Get user info from storage
 async function getUserInfo() {
