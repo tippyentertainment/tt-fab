@@ -9,7 +9,7 @@ let conversationHistory = [];
 let currentScreenshot = null;
 
 // TaskingBot avatar
-const TASKINGBOT_AVATAR = 'https://tasking.tech/_api/r2/users/4/generated/1772126543966-3wcgtkr3.png';
+const TASKINGBOT_AVATAR = 'icons/bot-avatar.png';
 
 function addMessage(content, isUser, hasScreenshot = false) {
   const messageDiv = document.createElement('div');
@@ -20,7 +20,7 @@ function addMessage(content, isUser, hasScreenshot = false) {
     const avatar = document.createElement('img');
     avatar.src = TASKINGBOT_AVATAR;
     avatar.className = 'avatar';
-    avatar.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; object-fit: cover;';
+    avatar.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; object-fit: cover; box-shadow: 0 0 0 3px #FF6B00; background: #0d0d0d;';
     messageDiv.appendChild(avatar);
   }
   
