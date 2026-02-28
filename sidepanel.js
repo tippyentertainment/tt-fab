@@ -196,7 +196,7 @@ function createThumbnail(dataUrl, maxWidth = 200) {
 // TaskingBot avatar from tasking.tech
 const TASKINGBOT_AVATAR = chrome.runtime.getURL('icons/bot-avatar.png');
 const USER_AVATAR = chrome.runtime.getURL('icons/user-icon.png'); // Default user avatar
-const API_URL = 'https://tasking.tech/taskingbot';
+const API_URL = 'https://tasking.tech/api/chat';
 
 // Conversation history for continuous chat
 let conversationHistory = [];
