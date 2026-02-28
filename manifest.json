@@ -6,9 +6,9 @@
   "permissions": ["activeTab", "sidePanel"],
   "action": {
     "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
+      "16": "https://tasking.tech/logo.png",
+      "48": "https://tasking.tech/logo.png",
+      "128": "https://tasking.tech/logo.png"
     }
   },
   "side_panel": {
