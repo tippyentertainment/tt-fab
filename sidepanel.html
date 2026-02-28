@@ -201,6 +201,9 @@
         </svg>
       </button>
       <div style="display:flex;gap:2px;align-items:center;">
+        <button class="sidebar-action-btn" id="sidebar-share-screen" title="Share Screen" style="background:none;border:none;cursor:pointer;padding:0 2px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF6B00" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
+        </button>
         <button class="sidebar-action-btn" id="sidebar-screenshot" title="Take Screenshot" style="background:none;border:none;cursor:pointer;padding:0 2px;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF6B00" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         </button>
@@ -231,19 +234,31 @@
       };
       fileInput.click();
     };
-    document.getElementById('sidebar-screenshot').onclick = function() {
-      // Request screenshot from background script
-      if (chrome && chrome.tabs && chrome.tabs.captureVisibleTab) {
-        chrome.tabs.captureVisibleTab(null, {format: 'png'}, function(dataUrl) {
-          if (dataUrl) {
-            addMessage('[Screenshot captured]', true);
-            addMessage(dataUrl, false); // Bot sends screenshot as image
-          } else {
-            addMessage('Failed to capture screenshot.', false);
-          }
-        });
-      } else {
-        addMessage('Screenshot not supported in this context.', false);
+    document.getElementById('sidebar-share-screen').onclick = async function() {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.muted = true;
+        video.style.maxWidth = '220px';
+        video.style.maxHeight = '140px';
+        video.style.margin = '10px 0';
+        video.style.borderRadius = '10px';
+        video.style.display = 'block';
+        // Add to chat as a bot message
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        const avatar = document.createElement('img');
+        avatar.src = 'https://tasking.tech/logo.png';
+        avatar.alt = 'Bot Avatar';
+        avatar.className = 'avatar';
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(video);
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      } catch (err) {
+        addMessage('Screen sharing was cancelled or failed.', false);
       }
     };
     document.getElementById('sidebar-clipboard').onclick = async function() {
