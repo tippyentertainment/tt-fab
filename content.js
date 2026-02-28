@@ -1,122 +1,178 @@
-// Content script - Standalone FAB that stores tasks locally
-
+// Content script - TaskingBot FAB with chat interface
 (function() {
   'use strict';
-  
+
   // Remove existing FAB
-  const existingFAB = document.getElementById('fab-button');
+  const existingFAB = document.getElementById('taskingbot-fab');
   if (existingFAB) existingFAB.remove();
 
-  // Create FAB
-  const fab = document.createElement('div');
-  fab.id = 'fab-button';
-  fab.innerHTML = '+';
-  fab.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 56px;
-    height: 56px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 32px;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    z-index: 999999;
-    transition: transform 0.2s;
-    font-weight: 300;
-  `;
-  
-  fab.addEventListener('click', () => {
-    showTaskModal();
-  });
-  
-  document.body.appendChild(fab);
-  
-  function showTaskModal() {
-    const existingModal = document.getElementById('fab-task-modal');
-    if (existingModal) {
-      existingModal.remove();
-      return;
-    }
-    
-    const modal = document.createElement('div');
-    modal.id = 'fab-task-modal';
-    modal.innerHTML = `
-      <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999999;">
-        <div style="background: white; padding: 24px; border-radius: 12px; width: 400px; max-width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
-          <h2 style="margin: 0 0 16px 0; color: #333; font-size: 20px;">Quick Task</h2>
-          <input type="text" id="fab-task-title" placeholder="Task title..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; margin-bottom: 12px; box-sizing: border-box;" />
-          <textarea id="fab-task-desc" placeholder="Description (optional)..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; margin-bottom: 16px; min-height: 80px; resize: vertical; box-sizing: border-box;"></textarea>
-          <div style="display: flex; gap: 8px;">
-            <button id="fab-cancel" style="flex: 1; padding: 12px; background: #f5f5f5; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Cancel</button>
-            <button id="fab-create" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Create Task</button>
-          </div>
+  // Create FAB container
+  const fabContainer = document.createElement('div');
+  fabContainer.id = 'taskingbot-fab';
+  fabContainer.innerHTML = `
+    <div id="fab-button" title="TaskingBot">
+      <img src="https://tasking.tech/logo.png" alt="TaskingBot" />
+    </div>
+    <div id="fab-panel">
+      <div id="fab-header">
+        <img src="https://tasking.tech/logo.png" alt="TaskingBot" />
+        <span>TaskingBot</span>
+        <button id="fab-close">×</button>
+      </div>
+      <div id="fab-messages"></div>
+      <div id="fab-input-area">
+        <div id="fab-attachments"></div>
+        <div id="fab-input-row">
+          <button id="fab-attach" title="Attach file">📎</button>
+          <button id="fab-screenshot" title="Take screenshot">📷</button>
+          <button id="fab-paste" title="Paste from clipboard">📋</button>
+          <input type="text" id="fab-input" placeholder="Type a message..." />
+          <button id="fab-send">Send</button>
         </div>
       </div>
-    `;
+    </div>
+  `;
+
+  document.body.appendChild(fabContainer);
+
+  // Elements
+  const fabButton = document.getElementById('fab-button');
+  const fabPanel = document.getElementById('fab-panel');
+  const fabClose = document.getElementById('fab-close');
+  const fabInput = document.getElementById('fab-input');
+  const fabSend = document.getElementById('fab-send');
+  const fabMessages = document.getElementById('fab-messages');
+  const fabAttach = document.getElementById('fab-attach');
+  const fabScreenshot = document.getElementById('fab-screenshot');
+  const fabPaste = document.getElementById('fab-paste');
+  const fabAttachments = document.getElementById('fab-attachments');
+
+  let attachments = [];
+
+  // Toggle panel
+  fabButton.addEventListener('click', () => {
+    fabPanel.classList.toggle('open');
+    if (fabPanel.classList.contains('open')) {
+      fabInput.focus();
+    }
+  });
+
+  fabClose.addEventListener('click', () => {
+    fabPanel.classList.remove('open');
+  });
+
+  // Send message
+  function sendMessage() {
+    const text = fabInput.value.trim();
+    if (!text && attachments.length === 0) return;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'fab-message user';
+    messageDiv.innerHTML = `<div class="message-content">${text}</div>`;
     
-    document.body.appendChild(modal);
-    document.getElementById('fab-task-title').focus();
-    
-    document.getElementById('fab-cancel').addEventListener('click', () => {
-      modal.remove();
-    });
-    
-    document.getElementById('fab-create').addEventListener('click', () => {
-      const title = document.getElementById('fab-task-title').value.trim();
-      const desc = document.getElementById('fab-task-desc').value.trim();
-      
-      if (!title) {
-        alert('Please enter a task title');
-        return;
-      }
-      
-      const task = {
-        id: Date.now(),
-        title: title,
-        description: desc,
-        url: window.location.href,
-        pageTitle: document.title,
-        createdAt: new Date().toISOString()
-      };
-      
-      // Store task locally
-      chrome.storage.local.get(['fabTasks'], (result) => {
-        const tasks = result.fabTasks || [];
-        tasks.push(task);
-        chrome.storage.local.set({ fabTasks: tasks }, () => {
-          modal.remove();
-          showNotification('✓ Task saved! Click the FAB to view tasks.');
-        });
+    if (attachments.length > 0) {
+      const attachmentsDiv = document.createElement('div');
+      attachmentsDiv.className = 'message-attachments';
+      attachments.forEach(att => {
+        if (att.type.startsWith('image/')) {
+          attachmentsDiv.innerHTML += `<img src="${att.data}" alt="attachment" />`;
+        } else {
+          attachmentsDiv.innerHTML += `<div class="file-attachment">📎 ${att.name}</div>`;
+        }
       });
+      messageDiv.appendChild(attachmentsDiv);
+    }
+
+    fabMessages.appendChild(messageDiv);
+    fabMessages.scrollTop = fabMessages.scrollHeight;
+
+    // Send to background script
+    chrome.runtime.sendMessage({
+      type: 'SEND_MESSAGE',
+      message: text,
+      attachments: attachments,
+      url: window.location.href
     });
-    
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.remove();
+
+    fabInput.value = '';
+    attachments = [];
+    fabAttachments.innerHTML = '';
+  }
+
+  fabSend.addEventListener('click', sendMessage);
+  fabInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendMessage();
+  });
+
+  // Attach file
+  fabAttach.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = (e) => handleFiles(e.target.files);
+    input.click();
+  });
+
+  // Take screenshot
+  fabScreenshot.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'TAKE_SCREENSHOT' });
+  });
+
+  // Paste from clipboard
+  fabPaste.addEventListener('click', async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            const reader = new FileReader();
+            reader.onload = (e) => addAttachment(e.target.result, 'image.png', type);
+            reader.readAsDataURL(blob);
+          } else if (type === 'text/plain') {
+            const blob = await item.getType(type);
+            const text = await blob.text();
+            fabInput.value += text;
+          }
+        }
+      }
+    } catch (err) {
+      console.log('Clipboard paste failed:', err);
+    }
+  });
+
+  // Handle file attachments
+  function handleFiles(files) {
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => addAttachment(e.target.result, file.name, file.type);
+      reader.readAsDataURL(file);
     });
   }
-  
-  function showNotification(message) {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      bottom: 90px;
-      right: 20px;
-      background: #4caf50;
-      color: white;
-      padding: 12px 24px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      z-index: 9999998;
-      font-size: 14px;
-    `;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 3000);
+
+  function addAttachment(data, name, type) {
+    attachments.push({ data, name, type });
+    const attDiv = document.createElement('div');
+    attDiv.className = 'attachment-preview';
+    if (type.startsWith('image/')) {
+      attDiv.innerHTML = `<img src="${data}" alt="${name}" /><button onclick="this.parentElement.remove()">×</button>`;
+    } else {
+      attDiv.innerHTML = `<span>📎 ${name}</span><button onclick="this.parentElement.remove()">×</button>`;
+    }
+    fabAttachments.appendChild(attDiv);
   }
+
+  // Listen for messages from background
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'SCREENSHOT_RESULT') {
+      addAttachment(msg.data, 'screenshot.png', 'image/png');
+    }
+    if (msg.type === 'BOT_RESPONSE') {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'fab-message bot';
+      messageDiv.innerHTML = `<div class="message-content">${msg.message}</div>`;
+      fabMessages.appendChild(messageDiv);
+      fabMessages.scrollTop = fabMessages.scrollHeight;
+    }
+  });
 })();
