@@ -1,269 +1,253 @@
-// Content script - TaskingBot FAB with chat interface (Dark Theme)
+// TaskingBot FAB - Content Script
+
 (function() {
   'use strict';
 
-  // Remove existing FAB
-  const existingFAB = document.getElementById('taskingbot-fab');
-  if (existingFAB) existingFAB.remove();
-
-  const existingMenu = document.getElementById('fab-context-menu');
-  if (existingMenu) existingMenu.remove();
+n  // State
+  let isOpen = false;
+  let messages = JSON.parse(localStorage.getItem('taskingbot_messages') || '[]');
 
   // Create FAB container
-  const fabContainer = document.createElement('div');
-  fabContainer.id = 'taskingbot-fab';
-  fabContainer.innerHTML = `
-    <div id="fab-button" title="TaskingBot">
-      <img src="https://tasking.tech/logo.png" alt="TaskingBot" />
-    </div>
-    <div id="fab-panel">
-      <div id="fab-header">
-        <img src="https://tasking.tech/logo.png" alt="TaskingBot" />
-        <span>TaskingBot</span>
-        <button id="fab-close">×</button>
+  const fab = document.createElement('div');
+  fab.id = 'taskingbot-fab';
+  fab.innerHTML = `
+    <div class="fab-container">
+      <div class="fab-header">
+        <div class="fab-title">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+            <line x1="9" y1="9" x2="9.01" y2="9"/>
+            <line x1="15" y1="9" x2="15.01" y2="9"/>
+          </svg>
+          <span>TaskingBot</span>
+        </div>
+        <button class="fab-close" title="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
-      <div id="fab-messages"></div>
-      <div id="fab-input-area">
-        <div id="fab-attachments"></div>
-        <div id="fab-input-row">
-          <button id="fab-attach" title="Attach file">📎</button>
-          <button id="fab-screenshot" title="Take screenshot">📷</button>
-          <button id="fab-paste" title="Paste from clipboard">📋</button>
+      
+      <div class="fab-messages" id="fab-messages">
+        <div class="fab-welcome">
+          <p>👋 Hi! I'm TaskingBot, your AI assistant.</p>
+          <p>Ask me anything or use the tools below!</p>
+        </div>
+      </div>
+      
+      <div class="fab-input-area">
+        <div class="fab-input-container">
           <input type="text" id="fab-input" placeholder="Type a message..." />
-          <button id="fab-send">Send</button>
+          <button id="fab-send" class="fab-send-btn" title="Send message">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="fab-actions">
+          <button class="fab-action-btn" id="fab-screenshot" title="Take Screenshot">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+          <button class="fab-action-btn" id="fab-clipboard" title="Paste from Clipboard">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            </svg>
+          </button>
+          <button class="fab-action-btn" id="fab-attach" title="Attach File">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>
+    
+    <button class="fab-toggle" id="fab-toggle" title="Open TaskingBot">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+        <line x1="9" y1="9" x2="9.01" y2="9"/>
+        <line x1="15" y1="9" x2="15.01" y2="9"/>
+      </svg>
+    </button>
   `;
 
-  document.body.appendChild(fabContainer);
-
-  // Create context menu (hidden by default)
-  const contextMenu = document.createElement('div');
-  contextMenu.id = 'fab-context-menu';
-  contextMenu.style.display = 'none';
-  contextMenu.innerHTML = `
-    <div class="menu-item" data-action="toggle">
-      <span>🔘</span> Toggle Panel
-    </div>
-    <div class="menu-item" data-action="screenshot">
-      <span>📸</span> Take Screenshot
-    </div>
-    <div class="menu-item" data-action="clipboard">
-      <span>📋</span> Paste from Clipboard
-    </div>
-    <div class="menu-divider"></div>
-    <div class="menu-item" data-action="hide">
-      <span>👁️</span> Hide for 1 hour
-    </div>
-    <div class="menu-item" data-action="disable">
-      <span>⚙️</span> Disable on this site
-    </div>
-    <div class="menu-divider"></div>
-    <div class="menu-item danger" data-action="off">
-      <span>❌</span> Turn Off
-    </div>
-  `;
-  document.body.appendChild(contextMenu);
+  document.body.appendChild(fab);
 
   // Elements
-  const fabButton = document.getElementById('fab-button');
-  const fabPanel = document.getElementById('fab-panel');
-  const fabClose = document.getElementById('fab-close');
-  const fabInput = document.getElementById('fab-input');
-  const fabSend = document.getElementById('fab-send');
-  const fabMessages = document.getElementById('fab-messages');
-  const fabAttach = document.getElementById('fab-attach');
-  const fabScreenshot = document.getElementById('fab-screenshot');
-  const fabPaste = document.getElementById('fab-paste');
-  const fabAttachments = document.getElementById('fab-attachments');
+  const toggle = document.getElementById('fab-toggle');
+  const closeBtn = document.getElementById('fab-close');
+  const messagesContainer = document.getElementById('fab-messages');
+  const input = document.getElementById('fab-input');
+  const sendBtn = document.getElementById('fab-send');
+  const screenshotBtn = document.getElementById('fab-screenshot');
+  const clipboardBtn = document.getElementById('fab-clipboard');
+  const attachBtn = document.getElementById('fab-attach');
 
-  let attachments = [];
-  let isHidden = false;
-
-  // Check if disabled on this site
-  chrome.storage?.local?.get([`disabled_${window.location.hostname}`], (result) => {
-    if (result[`disabled_${window.location.hostname}`]) {
-      fabContainer.style.display = 'none';
+  // Toggle FAB
+  toggle.addEventListener('click', () => {
+    isOpen = !isOpen;
+    fab.classList.toggle('open', isOpen);
+    if (isOpen) {
+      input.focus();
+      renderMessages();
     }
   });
 
-  // Toggle panel
-  fabButton.addEventListener('click', () => {
-    fabPanel.classList.toggle('open');
-    if (fabPanel.classList.contains('open')) {
-      fabInput.focus();
-    }
-  });
-
-  fabClose.addEventListener('click', () => {
-    fabPanel.classList.remove('open');
-  });
-
-  // Right-click context menu
-  fabButton.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    contextMenu.style.display = 'block';
-    contextMenu.style.left = `${e.pageX - 80}px`;
-    contextMenu.style.top = `${e.pageY - 200}px`;
-  });
-
-  // Close context menu on click outside
-  document.addEventListener('click', (e) => {
-    if (!contextMenu.contains(e.target)) {
-      contextMenu.style.display = 'none';
-    }
-  });
-
-  // Context menu actions
-  contextMenu.addEventListener('click', (e) => {
-    const menuItem = e.target.closest('.menu-item');
-    if (!menuItem) return;
-
-    const action = menuItem.dataset.action;
-    contextMenu.style.display = 'none';
-
-    switch (action) {
-      case 'toggle':
-        fabPanel.classList.toggle('open');
-        break;
-      case 'screenshot':
-        chrome.runtime.sendMessage({ type: 'TAKE_SCREENSHOT' });
-        break;
-      case 'clipboard':
-        fabPaste.click();
-        break;
-      case 'hide':
-        fabContainer.style.display = 'none';
-        isHidden = true;
-        setTimeout(() => {
-          fabContainer.style.display = 'block';
-          isHidden = false;
-        }, 3600000); // 1 hour
-        break;
-      case 'disable':
-        chrome.storage?.local?.set({ [`disabled_${window.location.hostname}`]: true });
-        fabContainer.style.display = 'none';
-        break;
-      case 'off':
-        chrome.storage?.local?.set({ fabEnabled: false });
-        fabContainer.style.display = 'none';
-        break;
-    }
+  closeBtn.addEventListener('click', () => {
+    isOpen = false;
+    fab.classList.remove('open');
   });
 
   // Send message
-  function sendMessage() {
-    const text = fabInput.value.trim();
-    if (!text && attachments.length === 0) return;
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
 
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'fab-message user';
-    messageDiv.innerHTML = `<div class="message-content">${text}</div>`;
+    addMessage('user', text);
+    input.value = '';
+
+    // Show typing indicator
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'fab-message fab-bot fab-typing';
+    typingDiv.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    messagesContainer.appendChild(typingDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    try {
+      // Send to background script which calls the API
+      const response = await chrome.runtime.sendMessage({
+        action: 'chat',
+        message: text
+      });
+
+      // Remove typing indicator
+      typingDiv.remove();
+
+      if (response && response.reply) {
+        addMessage('bot', response.reply);
+      } else if (response && response.error) {
+        addMessage('bot', `Error: ${response.error}`);
+      } else {
+        addMessage('bot', 'Sorry, I couldn\'t process that request. Please try again.');
+      }
+    } catch (error) {
+      typingDiv.remove();
+      addMessage('bot', 'Error connecting to TaskingBot. Please try again.');
+      console.error('FAB error:', error);
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  input.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      sendMessage();
+    }
+  });
+
+  // Add message to UI and storage
+  function addMessage(role, content) {
+    const msg = { role, content, timestamp: Date.now() };
+    messages.push(msg);
+    localStorage.setItem('taskingbot_messages', JSON.stringify(messages));
+    renderMessages();
+  }
+
+  // Render messages
+  function renderMessages() {
+    const welcomeMsg = messagesContainer.querySelector('.fab-welcome');
     
-    if (attachments.length > 0) {
-      const attachmentsDiv = document.createElement('div');
-      attachmentsDiv.className = 'message-attachments';
-      attachments.forEach(att => {
-        if (att.type.startsWith('image/')) {
-          attachmentsDiv.innerHTML += `<img src="${att.data}" alt="attachment" />`;
+    // Clear old messages except welcome
+    Array.from(messagesContainer.children).forEach(child => {
+      if (child !== welcomeMsg) {
+        child.remove();
+      }
+    });
+
+    // Add stored messages
+    messages.forEach(msg => {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `fab-message fab-${msg.role}`;
+      msgDiv.innerHTML = `<div class="fab-message-content">${escapeHtml(msg.content)}</div>`;
+      messagesContainer.appendChild(msgDiv);
+    });
+
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Screenshot
+  screenshotBtn.addEventListener('click', async () => {
+    try {
+      const dataUrl = await captureVisibleTab();
+      addMessage('user', '[Screenshot captured]');
+      addMessage('bot', 'Screenshot captured! I can analyze it once the API is connected.');
+    } catch (error) {
+      addMessage('bot', 'Failed to capture screenshot. Please try again.');
+    }
+  });
+
+  async function captureVisibleTab() {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ action: 'screenshot' }, (response) => {
+        if (response && response.dataUrl) {
+          resolve(response.dataUrl);
         } else {
-          attachmentsDiv.innerHTML += `<div class="file-attachment">📎 ${att.name}</div>`;
+          reject(new Error('Screenshot failed'));
         }
       });
-      messageDiv.appendChild(attachmentsDiv);
-    }
-
-    fabMessages.appendChild(messageDiv);
-    fabMessages.scrollTop = fabMessages.scrollHeight;
-
-    // Send to background script
-    chrome.runtime.sendMessage({
-      type: 'SEND_MESSAGE',
-      message: text,
-      attachments: attachments,
-      url: window.location.href
     });
-
-    fabInput.value = '';
-    attachments = [];
-    fabAttachments.innerHTML = '';
   }
 
-  fabSend.addEventListener('click', sendMessage);
-  fabInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
-  });
-
-  // Attach file
-  fabAttach.addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true;
-    input.onchange = (e) => handleFiles(e.target.files);
-    input.click();
-  });
-
-  // Take screenshot
-  fabScreenshot.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'TAKE_SCREENSHOT' });
-  });
-
-  // Paste from clipboard
-  fabPaste.addEventListener('click', async () => {
+  // Clipboard paste
+  clipboardBtn.addEventListener('click', async () => {
     try {
-      const clipboardItems = await navigator.clipboard.read();
-      for (const item of clipboardItems) {
-        for (const type of item.types) {
-          if (type.startsWith('image/')) {
-            const blob = await item.getType(type);
-            const reader = new FileReader();
-            reader.onload = (e) => addAttachment(e.target.result, 'image.png', type);
-            reader.readAsDataURL(blob);
-          } else if (type === 'text/plain') {
-            const blob = await item.getType(type);
-            const text = await blob.text();
-            fabInput.value += text;
-          }
-        }
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        input.value = text;
+        input.focus();
       }
-    } catch (err) {
-      console.log('Clipboard paste failed:', err);
+    } catch (error) {
+      addMessage('bot', 'Failed to read clipboard. Please paste manually.');
     }
   });
 
-  // Handle file attachments
-  function handleFiles(files) {
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => addAttachment(e.target.result, file.name, file.type);
-      reader.readAsDataURL(file);
-    });
-  }
+  // File attachment
+  attachBtn.addEventListener('click', () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,.pdf,.txt,.doc,.docx';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        addMessage('user', `[Attached: ${file.name}]`);
+        addMessage('bot', `File "${file.name}" attached. I can process it once the API is connected.`);
+      }
+    };
+    fileInput.click();
+  });
 
-  function addAttachment(data, name, type) {
-    attachments.push({ data, name, type });
-    const attDiv = document.createElement('div');
-    attDiv.className = 'attachment-preview';
-    if (type.startsWith('image/')) {
-      attDiv.innerHTML = `<img src="${data}" alt="${name}" /><button onclick="this.parentElement.remove()">×</button>`;
-    } else {
-      attDiv.innerHTML = `<span>📎 ${name}</span><button onclick="this.parentElement.remove()">×</button>`;
-    }
-    fabAttachments.appendChild(attDiv);
-  }
-
-  // Listen for messages from background
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === 'SCREENSHOT_RESULT') {
-      addAttachment(msg.data, 'screenshot.png', 'image/png');
-    }
-    if (msg.type === 'BOT_RESPONSE') {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'fab-message bot';
-      messageDiv.innerHTML = `<div class="message-content">${msg.message}</div>`;
-      fabMessages.appendChild(messageDiv);
-      fabMessages.scrollTop = fabMessages.scrollHeight;
+  // Context menu for selected text
+  document.addEventListener('mouseup', () => {
+    const selection = window.getSelection().toString().trim();
+    if (selection && selection.length > 10) {
+      // Store selection for context menu
+      localStorage.setItem('taskingbot_selection', selection);
     }
   });
+
 })();
