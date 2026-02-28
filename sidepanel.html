@@ -162,15 +162,19 @@
   <div class="header">
     <div class="logo"><img src="https://tasking.tech/logo.png" alt="TaskingBot Logo" style="width:32px;height:32px;border-radius:6px;" /></div>
     <div class="title">TaskingBot AI</div>
+    <label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+      <span style="color:#FF6B00;">On</span>
+      <input type="checkbox" id="botToggle" checked style="accent-color:#FF6B00;width:20px;height:20px;" />
+    </label>
   </div>
   
+  <div id="botDisabledMsg" style="display:none;padding:32px 16px;text-align:center;color:#FF6B00;font-weight:600;">TaskingBot is turned off.</div>
   <div class="chat-container" id="chat">
     <div class="message assistant">
       Hello! I'm TaskingBot, your AI assistant. How can I help you today?
     </div>
   </div>
-  
-  <div class="input-container">
+  <div class="input-container" id="inputContainer">
     <div class="input-wrapper">
       <input type="text" class="message-input" id="messageInput" placeholder="Type a message..." />
       <button class="send-button" id="sendButton">
@@ -182,5 +186,23 @@
   </div>
   
   <script src="sidepanel.js"></script>
+  <script>
+    // Toggle bot on/off
+    const botToggle = document.getElementById('botToggle');
+    const chat = document.getElementById('chat');
+    const inputContainer = document.getElementById('inputContainer');
+    const botDisabledMsg = document.getElementById('botDisabledMsg');
+    botToggle.addEventListener('change', function() {
+      if (this.checked) {
+        chat.style.display = '';
+        inputContainer.style.display = '';
+        botDisabledMsg.style.display = 'none';
+      } else {
+        chat.style.display = 'none';
+        inputContainer.style.display = 'none';
+        botDisabledMsg.style.display = '';
+      }
+    });
+  </script>
 </body>
 </html>
