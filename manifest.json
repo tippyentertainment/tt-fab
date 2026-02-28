@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "TaskingBot",
+  "name": "TaskingBot FAB",
   "version": "1.0",
-  "description": "AI assistant floating action button",
-  "permissions": ["activeTab", "sidePanel"],
+  "description": "AI assistant with screen sharing and task management",
+  "permissions": ["activeTab", "sidePanel", "tabs", "scripting"],
   "action": {
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
     }
   },
   "side_panel": {
@@ -16,5 +16,9 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "host_permissions": [
+    "https://tasking.tech/*",
+    "https://ai.tasking.tech/*"
+  ]
 }
