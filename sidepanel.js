@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     screenShareBtn.addEventListener('click', async () => {
       const stream = await requestScreenShare();
       if (stream) {
-        // create video preview
+        // create video preview with stop control
         const video = document.createElement('video');
         video.srcObject = stream;
         video.autoplay = true;
@@ -53,6 +53,14 @@ document.addEventListener('DOMContentLoaded', () => {
         video.style.margin = '10px 0';
         video.style.borderRadius = '10px';
         video.style.display = 'block';
+        const stopBtn = document.createElement('button');
+        stopBtn.textContent = 'Stop';
+        stopBtn.style.marginLeft = '8px';
+        stopBtn.onclick = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          stopBtn.remove();
+          video.remove();
+        };
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message assistant';
         const avatar = document.createElement('img');
@@ -60,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         avatar.className = 'avatar';
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(video);
+        messageDiv.appendChild(stopBtn);
         chatContainer.appendChild(messageDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
       } else {
