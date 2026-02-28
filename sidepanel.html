@@ -184,7 +184,7 @@
 </head>
 <body>
   <div class="header">
-    <div class="logo"><img src="https://tasking.tech/logo.png" alt="TaskingBot Logo" style="width:32px;height:32px;border-radius:6px;" /></div>
+    <div class="logo"><img src="" id="headerLogo" alt="TaskingBot Logo" style="width:32px;height:32px;border-radius:6px;" /></div>
     <div class="title">TaskingBot AI</div>
     <label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
       <span style="color:#FF6B00;">On</span>
@@ -223,6 +223,15 @@
   <div id="screenshotPreview" style="display:none; padding: 16px;"></div>
   <div id="attachmentPreview" style="display:none; padding: 16px;"></div>
   <script src="sidepanel.js"></script>
+  <script>
+    // replace header logo with local icon
+    document.addEventListener('DOMContentLoaded', () => {
+      const logo = document.getElementById('headerLogo');
+      if (logo) {
+        logo.src = chrome.runtime.getURL('icons/icon128.png');
+      }
+    });
+  </script>
   <script>
     // Toggle bot on/off
     const botToggle = document.getElementById('botToggle');
