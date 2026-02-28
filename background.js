@@ -12,28 +12,51 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   if (request.action === 'sendToAI') {
-    // forward to TaskingBot endpoint
     console.log('background: sending to AI', request.payload);
-    fetch('https://tasking.tech/taskingbot/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request.payload)
-    })
-    .then(async (r) => {
-      const text = await r.text();
-      console.log('background: raw response text', text);
-      try {
-        const data = JSON.parse(text);
-        sendResponse({ result: data });
-      } catch (parseErr) {
-        console.error('Background parse error, raw response:', text);
-        sendResponse({ error: 'Invalid JSON response: ' + parseErr.message + ' - ' + text });
+    const base = 'https://tasking.tech';
+    const candidates = [
+      '/taskingbot/api/chat',
+      '/api/chat',
+      '/taskingbot',
+      '/api/taskingbot/chat',
+      '/taskingbot/chat'
+    ];
+    (async function tryPaths(idx) {
+      if (idx >= candidates.length) {
+        sendResponse({ error: 'all endpoints failed' });
+        return;
       }
-    })
-    .catch(err => {
-      console.error('background fetch error', err);
-      sendResponse({ error: err.message });
-    });
+      const url = base + candidates[idx];
+      console.log('background: trying endpoint', url);
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request.payload)
+        });
+        const text = await r.text();
+        console.log('background: response from', url, r.status);
+        if (r.status === 404) {
+          // try next
+          return tryPaths(idx + 1);
+        }
+        if (!r.ok) {
+          console.error('background failed status', r.status, text);
+          sendResponse({ error: 'status ' + r.status + ' - ' + text });
+          return;
+        }
+        try {
+          const data = JSON.parse(text);
+          sendResponse({ result: data });
+        } catch (parseErr) {
+          console.error('Background parse error, raw response:', text);
+          sendResponse({ error: 'Invalid JSON response: ' + parseErr.message + ' - ' + text });
+        }
+      } catch (err) {
+        console.error('background fetch error', err);
+        sendResponse({ error: err.message });
+      }
+    })(0);
     return true;
   }
 });
