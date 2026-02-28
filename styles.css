@@ -1,102 +1,4 @@
-/* TaskingBot FAB Styles */
-
-body {
-  font-family: Arial, sans-serif;
-  background: #111;
-  margin: 0;
-  padding: 0;
-  color: #fff;
-}
-.chat-header {
-  background: linear-gradient(90deg, #111 0%, #ff8800 100%);
-  color: #fff;
-  padding: 16px;
-  font-size: 1.5em;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
-  border-bottom: 2px solid #ff8800;
-}
-.chat-message.user {
-  align-self: flex-end;
-  background: linear-gradient(90deg, #ff8800 0%, #ff6600 100%);
-  color: #fff;
-}
-.chat-message.bot {
-  align-self: flex-start;
-  background: #222;
-  color: #fff;
-  border-left: 4px solid #ff8800;
-}
-.chat-message {
-  max-width: 70%;
-  margin: 8px 0;
-  padding: 12px 16px;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  font-size: 1em;
-  word-break: break-word;
-  background-clip: padding-box;
-}
-.chat-input-container {
-  display: flex;
-  align-items: center;
-  padding: 16px;
-  background: #181818;
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 16px;
-  border-top: 1px solid #333;
-}
-.chat-input {
-  flex: 1;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #ff8800;
-  font-size: 1em;
-  margin-right: 8px;
-  background: #222;
-  color: #fff;
-}
-.chat-send-btn {
-  background: linear-gradient(90deg, #ff8800 0%, #ff6600 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 20px;
-  font-size: 1em;
-  cursor: pointer;
-  transition: background 0.2s;
-  font-weight: bold;
-  box-shadow: 0 2px 8px rgba(255,136,0,0.15);
-}
-.chat-send-btn:hover {
-  background: linear-gradient(90deg, #ff6600 0%, #ff8800 100%);
-}
-.chat-container {
-  width: 400px;
-  margin: 40px auto;
-  background: #181818;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(255,136,0,0.12);
-  display: flex;
-  flex-direction: column;
-  min-height: 600px;
-  overflow: hidden;
-  border: 1.5px solid #ff8800;
-}
-.chat-message.bot.error {
-  background: #2a1a1a;
-  color: #ff8800;
-  border-left: 4px solid #ff8800;
-}
-.chat-message.bot .error-text {
-  color: #ff8800;
-  font-weight: bold;
-}
-/* TaskingBot FAB Styles */
+/* TaskingBot FAB Styles - Dark Theme */
 
 #taskingbot-fab {
   position: fixed;
@@ -110,19 +12,20 @@ body {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: #1a1a1a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.2s, box-shadow 0.2s;
-  border: none;
+  border: 2px solid #FF6B00;
 }
 
 #fab-button:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 6px 20px rgba(255, 107, 0, 0.3);
+  border-color: #FF8C00;
 }
 
 #fab-button img {
@@ -137,12 +40,13 @@ body {
   right: 0;
   width: 380px;
   height: 520px;
-  background: white;
+  background: #0d0d0d;
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   display: none;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid #2a2a2a;
 }
 
 #fab-panel.open {
@@ -166,8 +70,9 @@ body {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: linear-gradient(135deg, #00D4FF 0%, #0066FF 100%);
+  background: #1a1a1a;
   color: white;
+  border-bottom: 1px solid #2a2a2a;
 }
 
 #fab-header img {
@@ -185,11 +90,16 @@ body {
 #fab-close {
   background: none;
   border: none;
-  color: white;
+  color: #888;
   font-size: 24px;
   cursor: pointer;
   padding: 0;
   line-height: 1;
+  transition: color 0.2s;
+}
+
+#fab-close:hover {
+  color: #FF6B00;
 }
 
 #fab-messages {
@@ -199,6 +109,24 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  background: #0d0d0d;
+}
+
+#fab-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+#fab-messages::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+#fab-messages::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+
+#fab-messages::-webkit-scrollbar-thumb:hover {
+  background: #FF6B00;
 }
 
 .fab-message {
@@ -211,16 +139,17 @@ body {
 
 .fab-message.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, #00D4FF 0%, #0066FF 100%);
+  background: #FF6B00;
   color: white;
   border-bottom-right-radius: 4px;
 }
 
 .fab-message.bot {
   align-self: flex-start;
-  background: #f0f0f0;
-  color: #333;
+  background: #1a1a1a;
+  color: #e0e0e0;
   border-bottom-left-radius: 4px;
+  border: 1px solid #2a2a2a;
 }
 
 .message-attachments {
@@ -236,15 +165,16 @@ body {
 }
 
 .file-attachment {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 107, 0, 0.2);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
 }
 
 #fab-input-area {
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #2a2a2a;
   padding: 12px;
+  background: #1a1a1a;
 }
 
 #fab-attachments {
@@ -256,7 +186,7 @@ body {
 
 .attachment-preview {
   position: relative;
-  background: #f5f5f5;
+  background: #2a2a2a;
   border-radius: 8px;
   padding: 4px;
 }
@@ -275,11 +205,15 @@ body {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #ff4444;
+  background: #FF6B00;
   color: white;
   border: none;
   cursor: pointer;
   font-size: 12px;
+}
+
+.attachment-preview button:hover {
+  background: #FF8C00;
 }
 
 #fab-input-row {
@@ -299,33 +233,83 @@ body {
 }
 
 #fab-input-row button:hover {
-  background: #f0f0f0;
+  background: #2a2a2a;
 }
 
 #fab-input {
   flex: 1;
   padding: 10px 14px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #2a2a2a;
   border-radius: 20px;
   font-size: 14px;
   outline: none;
+  background: #0d0d0d;
+  color: white;
+}
+
+#fab-input::placeholder {
+  color: #666;
 }
 
 #fab-input:focus {
-  border-color: #0066FF;
+  border-color: #FF6B00;
 }
 
 #fab-send {
-  background: linear-gradient(135deg, #00D4FF 0%, #0066FF 100%);
+  background: #FF6B00;
   color: white;
   border: none;
   padding: 10px 20px;
   border-radius: 20px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: background 0.2s, transform 0.2s;
 }
 
 #fab-send:hover {
+  background: #FF8C00;
   transform: scale(1.05);
+}
+
+/* Context Menu */
+#fab-context-menu {
+  position: fixed;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 9999999;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+#fab-context-menu .menu-item {
+  padding: 10px 16px;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.2s;
+}
+
+#fab-context-menu .menu-item:hover {
+  background: #FF6B00;
+  color: white;
+}
+
+#fab-context-menu .menu-item.danger {
+  color: #ff4444;
+}
+
+#fab-context-menu .menu-item.danger:hover {
+  background: #ff4444;
+  color: white;
+}
+
+#fab-context-menu .menu-divider {
+  height: 1px;
+  background: #2a2a2a;
+  margin: 4px 0;
 }

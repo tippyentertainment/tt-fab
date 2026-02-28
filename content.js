@@ -1,10 +1,13 @@
-// Content script - TaskingBot FAB with chat interface
+// Content script - TaskingBot FAB with chat interface (Dark Theme)
 (function() {
   'use strict';
 
   // Remove existing FAB
   const existingFAB = document.getElementById('taskingbot-fab');
   if (existingFAB) existingFAB.remove();
+
+  const existingMenu = document.getElementById('fab-context-menu');
+  if (existingMenu) existingMenu.remove();
 
   // Create FAB container
   const fabContainer = document.createElement('div');
@@ -35,6 +38,34 @@
 
   document.body.appendChild(fabContainer);
 
+  // Create context menu (hidden by default)
+  const contextMenu = document.createElement('div');
+  contextMenu.id = 'fab-context-menu';
+  contextMenu.style.display = 'none';
+  contextMenu.innerHTML = `
+    <div class="menu-item" data-action="toggle">
+      <span>🔘</span> Toggle Panel
+    </div>
+    <div class="menu-item" data-action="screenshot">
+      <span>📸</span> Take Screenshot
+    </div>
+    <div class="menu-item" data-action="clipboard">
+      <span>📋</span> Paste from Clipboard
+    </div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" data-action="hide">
+      <span>👁️</span> Hide for 1 hour
+    </div>
+    <div class="menu-item" data-action="disable">
+      <span>⚙️</span> Disable on this site
+    </div>
+    <div class="menu-divider"></div>
+    <div class="menu-item danger" data-action="off">
+      <span>❌</span> Turn Off
+    </div>
+  `;
+  document.body.appendChild(contextMenu);
+
   // Elements
   const fabButton = document.getElementById('fab-button');
   const fabPanel = document.getElementById('fab-panel');
@@ -48,6 +79,14 @@
   const fabAttachments = document.getElementById('fab-attachments');
 
   let attachments = [];
+  let isHidden = false;
+
+  // Check if disabled on this site
+  chrome.storage?.local?.get([`disabled_${window.location.hostname}`], (result) => {
+    if (result[`disabled_${window.location.hostname}`]) {
+      fabContainer.style.display = 'none';
+    }
+  });
 
   // Toggle panel
   fabButton.addEventListener('click', () => {
@@ -59,6 +98,58 @@
 
   fabClose.addEventListener('click', () => {
     fabPanel.classList.remove('open');
+  });
+
+  // Right-click context menu
+  fabButton.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    contextMenu.style.display = 'block';
+    contextMenu.style.left = `${e.pageX - 80}px`;
+    contextMenu.style.top = `${e.pageY - 200}px`;
+  });
+
+  // Close context menu on click outside
+  document.addEventListener('click', (e) => {
+    if (!contextMenu.contains(e.target)) {
+      contextMenu.style.display = 'none';
+    }
+  });
+
+  // Context menu actions
+  contextMenu.addEventListener('click', (e) => {
+    const menuItem = e.target.closest('.menu-item');
+    if (!menuItem) return;
+
+    const action = menuItem.dataset.action;
+    contextMenu.style.display = 'none';
+
+    switch (action) {
+      case 'toggle':
+        fabPanel.classList.toggle('open');
+        break;
+      case 'screenshot':
+        chrome.runtime.sendMessage({ type: 'TAKE_SCREENSHOT' });
+        break;
+      case 'clipboard':
+        fabPaste.click();
+        break;
+      case 'hide':
+        fabContainer.style.display = 'none';
+        isHidden = true;
+        setTimeout(() => {
+          fabContainer.style.display = 'block';
+          isHidden = false;
+        }, 3600000); // 1 hour
+        break;
+      case 'disable':
+        chrome.storage?.local?.set({ [`disabled_${window.location.hostname}`]: true });
+        fabContainer.style.display = 'none';
+        break;
+      case 'off':
+        chrome.storage?.local?.set({ fabEnabled: false });
+        fabContainer.style.display = 'none';
+        break;
+    }
   });
 
   // Send message
