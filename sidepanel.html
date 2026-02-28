@@ -124,8 +124,8 @@
     }
     
     .send-button {
-      width: 44px;
-      height: 44px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       background: linear-gradient(90deg, #FF6B00 0%, #FF8C00 100%);
       border: none;
@@ -134,11 +134,14 @@
       align-items: center;
       justify-content: center;
       transition: transform 0.2s, box-shadow 0.2s;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 0;
     }
 
     .send-button:hover {
       transform: scale(1.05);
-      box-shadow: 0 4px 20px rgba(255, 107, 0, 0.3);
+      box-shadow: 0 2px 8px rgba(255, 107, 0, 0.2);
     }
     
     .send-button svg {
@@ -229,9 +232,19 @@
       fileInput.click();
     };
     document.getElementById('sidebar-screenshot').onclick = function() {
-      // Simulate screenshot (real implementation would require background script)
-      addMessage('[Screenshot captured]', true);
-      addMessage('Screenshot captured! I can analyze it once the API is connected.', false);
+      // Request screenshot from background script
+      if (chrome && chrome.tabs && chrome.tabs.captureVisibleTab) {
+        chrome.tabs.captureVisibleTab(null, {format: 'png'}, function(dataUrl) {
+          if (dataUrl) {
+            addMessage('[Screenshot captured]', true);
+            addMessage(dataUrl, false); // Bot sends screenshot as image
+          } else {
+            addMessage('Failed to capture screenshot.', false);
+          }
+        });
+      } else {
+        addMessage('Screenshot not supported in this context.', false);
+      }
     };
     document.getElementById('sidebar-clipboard').onclick = async function() {
       try {
