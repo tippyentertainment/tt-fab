@@ -2,6 +2,8 @@
 console.log('sidepanel.js loaded');
 
 // === EVENT HANDLERS INIT ===
+// global element references
+let chatContainer, messageInput, sendBtn, screenshotBtn, screenShareBtn, attachBtn;
 document.addEventListener('DOMContentLoaded', () => {
   // element references
   chatContainer = document.getElementById('chat');
