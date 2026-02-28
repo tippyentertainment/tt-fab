@@ -195,8 +195,8 @@ function createThumbnail(dataUrl, maxWidth = 200) {
 }
 
 // TaskingBot avatar from tasking.tech
-const TASKINGBOT_AVATAR = 'https://tasking.tech/bot-avatar.png';
-const USER_AVATAR = 'https://tasking.tech/user-avatar.png'; // Default user avatar
+const TASKINGBOT_AVATAR = 'icons/bot-avatar.png';
+const USER_AVATAR = 'icons/user-icon.png'; // Default user avatar
 const API_URL = 'https://tasking.tech/api/chat';
 
 // Conversation history for continuous chat
