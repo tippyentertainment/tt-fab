@@ -56,28 +56,26 @@ function hideTyping() {
 
 async function captureScreenshot() {
   try {
-    // Request permission and capture visible tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    // Request screenshot via background script
+    const response = await chrome.runtime.sendMessage({ action: 'captureScreenshot' });
     
-    const screenshotUrl = await chrome.tabs.captureVisibleTab(null, {
-      format: 'png',
-      quality: 90
-    });
-    
-    currentScreenshot = screenshotUrl;
-    
-    // Show preview
-    const preview = document.getElementById('screenshotPreview');
-    if (preview) {
-      preview.innerHTML = `<img src="${screenshotUrl}" style="max-width: 100%; border-radius: 8px;" />`;
-      preview.style.display = 'block';
+    if (response && response.screenshot) {
+      currentScreenshot = response.screenshot;
+      
+      // Show preview
+      const preview = document.getElementById('screenshotPreview');
+      if (preview) {
+        preview.innerHTML = `<img src="${response.screenshot}" style="max-width: 100%; border-radius: 8px;" />`;
+        preview.style.display = 'block';
+      }
+      
+      addMessage('Screenshot captured! Ask me anything about it.', false);
+    } else {
+      addMessage('Screenshot failed. Please try again.', false);
     }
-    
-    return screenshotUrl;
   } catch (error) {
     console.error('Screenshot failed:', error);
     addMessage('Screenshot permission denied. Please allow screen capture in extension settings.', false);
-    return null;
   }
 }
 
