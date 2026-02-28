@@ -13,6 +13,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   if (request.action === 'sendToAI') {
     // forward to TaskingBot endpoint
+    console.log('background: sending to AI', request.payload);
     fetch('https://tasking.tech/taskingbot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -20,6 +21,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     })
     .then(async (r) => {
       const text = await r.text();
+      console.log('background: raw response text', text);
       try {
         const data = JSON.parse(text);
         sendResponse({ result: data });
@@ -28,7 +30,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ error: 'Invalid JSON response: ' + parseErr.message + ' - ' + text });
       }
     })
-    .catch(err => sendResponse({ error: err.message }));
+    .catch(err => {
+      console.error('background fetch error', err);
+      sendResponse({ error: err.message });
+    });
     return true;
   }
 });
