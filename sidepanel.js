@@ -1,4 +1,7 @@
-// === EVENT HANDLERS INIT (unified, no CSS/UI changes) ===
+// sidepanel.js loaded
+console.log('sidepanel.js loaded');
+
+// === EVENT HANDLERS INIT ===
 document.addEventListener('DOMContentLoaded', () => {
   const messageInput = document.getElementById('messageInput');
   const sendBtn = document.getElementById('sendButton');
@@ -6,38 +9,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const screenShareBtn = document.getElementById('sidebar-share-screen');
   const attachBtn = document.getElementById('sidebar-attach');
 
-  // Send message on Enter, allow Shift+Enter for newline
-  messageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendBtn.click();
-    }
-  });
-
-  // Send message on button click
-  sendBtn.addEventListener('click', async () => {
-    await sendMessage();
-  });
-
-  // Screenshot button
-  if (screenshotBtn) {
-    screenshotBtn.addEventListener('click', async () => {
-      const dataUrl = await takeScreenshot();
-      if (dataUrl) {
-        showScreenshotPreview(dataUrl);
+  if (messageInput) {
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn && sendBtn.click();
       }
     });
   }
 
-  // Screen share button
+  if (sendBtn) {
+    sendBtn.addEventListener('click', async () => {
+      await sendMessage();
+    });
+  }
+
+  if (screenshotBtn) {
+    screenshotBtn.addEventListener('click', async () => {
+      const dataUrl = await takeScreenshot();
+      if (dataUrl) showScreenshotPreview(dataUrl);
+    });
+  }
+
   if (screenShareBtn) {
     screenShareBtn.addEventListener('click', async () => {
-      // The modal and stream logic is handled in HTML inline script, so just log for now
       console.log('Screen share button clicked');
     });
   }
 
-  // Attach button (creates file input on click)
   if (attachBtn) {
     attachBtn.addEventListener('click', () => {
       const fileInput = document.createElement('input');
@@ -46,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
       fileInput.onchange = function(e) {
         const file = e.target.files[0];
         if (file) {
-          // Show file name in chat (simulate upload)
           addMessage(`[Attached: ${file.name}]`, true);
           addMessage(`File "${file.name}" attached. I can process it once the API is connected.`, false);
         }
@@ -55,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Clipboard paste for files
   document.addEventListener('paste', (e) => {
     if (e.clipboardData && e.clipboardData.files.length > 0) {
       const file = e.clipboardData.files[0];
