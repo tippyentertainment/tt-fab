@@ -1,23 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "TaskingBot AI Assistant",
+  "name": "TaskingBot",
   "version": "1.0",
   "description": "AI assistant floating action button",
-  "permissions": [
-    "activeTab",
-    "sidePanel",
-    "tabs",
-    "scripting"
-  ],
-  "host_permissions": [
-    "https://tasking.tech/*",
-    "https://*.tasking.tech/*"
-  ],
+  "permissions": ["activeTab", "sidePanel"],
   "action": {
     "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "side_panel": {
