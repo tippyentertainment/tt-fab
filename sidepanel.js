@@ -7,26 +7,53 @@ const API_URL = 'https://tasking.tech/api/chat';
 function addMessage(content, isUser) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+  let avatar, span;
   if (isUser) {
-    // User avatar
-    const avatar = document.createElement('img');
+    avatar = document.createElement('img');
     avatar.src = 'https://tasking.tech/avatar.png';
     avatar.alt = 'User Avatar';
     avatar.className = 'avatar';
     messageDiv.appendChild(avatar);
-    const span = document.createElement('span');
+    span = document.createElement('span');
     span.textContent = content;
     messageDiv.appendChild(span);
   } else {
-    // Bot avatar (logo)
-    const avatar = document.createElement('img');
+    avatar = document.createElement('img');
     avatar.src = 'https://tasking.tech/logo.png';
     avatar.alt = 'Bot Avatar';
     avatar.className = 'avatar';
     messageDiv.appendChild(avatar);
-    const span = document.createElement('span');
-    span.textContent = content;
-    messageDiv.appendChild(span);
+    // Check for image URLs in content
+    const urlRegex = /(https?:\/\/(?:[\w-]+\.)+[\w-]+(?:\/[\w\-._~:/?#[\]@!$&'()*+,;=]*)?\.(?:png|jpg|jpeg|gif|webp|bmp|svg))/gi;
+    let match, lastIndex = 0;
+    while ((match = urlRegex.exec(content)) !== null) {
+      // Text before image
+      if (match.index > lastIndex) {
+        const textPart = content.substring(lastIndex, match.index);
+        if (textPart.trim()) {
+          const textSpan = document.createElement('span');
+          textSpan.textContent = textPart;
+          messageDiv.appendChild(textSpan);
+        }
+      }
+      // Image
+      const img = document.createElement('img');
+      img.src = match[1];
+      img.alt = 'Bot Attachment';
+      img.style.maxWidth = '180px';
+      img.style.maxHeight = '120px';
+      img.style.margin = '8px 0';
+      img.style.borderRadius = '8px';
+      img.style.display = 'block';
+      messageDiv.appendChild(img);
+      lastIndex = urlRegex.lastIndex;
+    }
+    // Any remaining text after last image
+    if (lastIndex < content.length) {
+      const textSpan = document.createElement('span');
+      textSpan.textContent = content.substring(lastIndex);
+      messageDiv.appendChild(textSpan);
+    }
   }
   chatContainer.appendChild(messageDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
