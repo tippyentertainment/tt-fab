@@ -240,11 +240,11 @@ function addMessage(content, isUser, attachment = null) {
   if (!isUser) {
     const copyBtn = document.createElement('button');
     copyBtn.innerHTML = '📋';
-    copyBtn.style.marginLeft = '8px';
+    copyBtn.style.marginLeft = '6px';
     copyBtn.style.fontSize = '14px';
-    copyBtn.style.padding = '2px 6px';
-    copyBtn.style.borderRadius = '4px';
+    copyBtn.style.padding = '0';
     copyBtn.style.border = 'none';
+    copyBtn.style.background = 'transparent';
     copyBtn.style.cursor = 'pointer';
     copyBtn.title = 'Copy response';
     copyBtn.onclick = () => {
