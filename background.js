@@ -54,12 +54,76 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (request.action === 'performActions') {
+    sendToActiveTab({ action: 'performActions', actions: request.actions || [] })
+      .then((response) => sendResponse(response || { results: [] }))
+      .catch((err) =>
+        sendResponse({ error: err && err.message ? err.message : 'Failed to perform actions' }),
+      );
+    return true;
+  }
+
+  if (request.action === 'getLogs') {
+    sendToActiveTab({ action: 'getLogs' })
+      .then((response) => sendResponse(response || {}))
+      .catch((err) =>
+        sendResponse({ error: err && err.message ? err.message : 'Failed to get logs' }),
+      );
+    return true;
+  }
+
+  if (request.action === 'openTab') {
+    if (!request.url) {
+      sendResponse({ error: 'Missing url' });
+      return;
+    }
+    chrome.tabs.create({ url: request.url, active: true }, (tab) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ error: chrome.runtime.lastError.message });
+        return;
+      }
+      sendResponse({ ok: true, tabId: tab?.id || null });
+    });
+    return true;
+  }
+
+  if (request.action === 'getActiveTabInfo') {
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+      const tab = tabs && tabs[0];
+      if (!tab) {
+        sendResponse({ url: null, title: null });
+        return;
+      }
+      sendResponse({ url: tab.url || null, title: tab.title || null });
+    });
+    return true;
+  }
 });
 
 async function getTaskingSessionToken() {
   return new Promise((resolve) => {
     chrome.cookies.get({ url: 'https://tasking.tech', name: 'tasking_session' }, (cookie) => {
       resolve(cookie?.value || null);
+    });
+  });
+}
+
+function sendToActiveTab(message) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+      const tab = tabs && tabs[0];
+      if (!tab || !tab.id) {
+        reject(new Error('No active tab found.'));
+        return;
+      }
+      chrome.tabs.sendMessage(tab.id, message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(response);
+      });
     });
   });
 }

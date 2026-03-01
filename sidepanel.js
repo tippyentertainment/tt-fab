@@ -7,6 +7,12 @@ const TASKINGBOT_AVATAR_FALLBACK = chrome.runtime.getURL('icons/logo.png');
 
 let conversationHistory = [];
 
+const sendQueue = [];
+let isSending = false;
+const actionBatches = [];
+let isProcessingActions = false;
+const MAX_ACTION_LOGS = 50;
+
 let chatContainer;
 let messageInput;
 let sendBtn;
@@ -18,6 +24,8 @@ let botDisabledMsg;
 let inputContainer;
 
 const REQUEST_TIMEOUT_MS = 30000;
+const TASKING_DOMAIN_HOSTS = ['tasking.tech'];
+const TASKING_DOMAIN_SUFFIXES = ['.tasking.tech'];
 
 document.addEventListener('DOMContentLoaded', () => {
   chatContainer = document.getElementById('chat');
@@ -151,8 +159,6 @@ async function sendToAI(message, attachment = null) {
 
         if (response && response.result) {
           const data = response.result;
-          conversationHistory.push({ role: 'user', content: message });
-          conversationHistory.push({ role: 'assistant', content: extractAssistantText(data) });
           resolve(data);
           return;
         }
@@ -161,6 +167,125 @@ async function sendToAI(message, attachment = null) {
       }
     );
   });
+}
+
+function recordConversation(userText, assistantText) {
+  conversationHistory.push({ role: 'user', content: userText });
+  conversationHistory.push({ role: 'assistant', content: assistantText });
+}
+
+function enqueueOutgoing(item) {
+  if (!item || !item.text) {
+    return;
+  }
+  sendQueue.push(item);
+  if (!isSending) {
+    void processSendQueue();
+  }
+}
+
+function dequeueNextItem() {
+  const priorityIndex = sendQueue.findIndex((entry) => entry.priority);
+  if (priorityIndex >= 0) {
+    return sendQueue.splice(priorityIndex, 1)[0];
+  }
+  return sendQueue.shift();
+}
+
+async function processSendQueue() {
+  if (isSending) {
+    return;
+  }
+  const nextItem = dequeueNextItem();
+  if (!nextItem) {
+    return;
+  }
+  isSending = true;
+  showTypingIndicator();
+
+  try {
+    const aiResponse = await sendToAI(nextItem.text, nextItem.attachment || null);
+    const rawText = extractAssistantText(aiResponse);
+    const { cleanText, actions } = extractActionsFromResponse(rawText);
+    const assistantTextForHistory =
+      cleanText && cleanText.trim().length > 0
+        ? cleanText.trim()
+        : actions.length > 0
+          ? '[Actions requested]'
+          : rawText;
+    recordConversation(nextItem.text, assistantTextForHistory);
+    hideTypingIndicator();
+
+    if (cleanText && cleanText.trim().length > 0) {
+      addMessage(cleanText, false);
+    } else if (!actions || actions.length === 0) {
+      addMessage(rawText, false);
+    } else {
+      addMessage('Executing requested actions...', false);
+    }
+
+    if (actions && actions.length > 0) {
+      queueActionBatch(actions, rawText);
+    }
+  } catch (err) {
+    hideTypingIndicator();
+    addMessage(`Error: ${err.message}`, false);
+  } finally {
+    isSending = false;
+    if (sendQueue.length > 0) {
+      void processSendQueue();
+    }
+  }
+}
+
+function extractActionsFromResponse(text) {
+  if (!text || typeof text !== 'string') {
+    return { cleanText: '', actions: [] };
+  }
+
+  let cleanText = text;
+  let actions = [];
+
+  const tagMatch = cleanText.match(/\[ACTIONS\]([\s\S]*?)\[\/ACTIONS\]/i);
+  if (tagMatch) {
+    actions = parseActionJson(tagMatch[1]);
+    cleanText = cleanText.replace(tagMatch[0], '').trim();
+  }
+
+  if (actions.length === 0) {
+    const codeMatch = cleanText.match(/```json([\s\S]*?)```/i);
+    if (codeMatch && codeMatch[1] && codeMatch[1].includes('"actions"')) {
+      actions = parseActionJson(codeMatch[1]);
+      cleanText = cleanText.replace(codeMatch[0], '').trim();
+    }
+  }
+
+  return { cleanText, actions };
+}
+
+function parseActionJson(rawJson) {
+  if (!rawJson || typeof rawJson !== 'string') {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(rawJson.trim());
+    return normalizeActions(parsed);
+  } catch (err) {
+    return [];
+  }
+}
+
+function normalizeActions(parsed) {
+  if (!parsed) {
+    return [];
+  }
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  if (Array.isArray(parsed.actions)) {
+    return parsed.actions;
+  }
+  return [];
 }
 
 async function sendMessage() {
@@ -179,15 +304,312 @@ async function sendMessage() {
   addMessage(text, true);
   messageInput.value = '';
 
-  showTypingIndicator();
-  try {
-    const aiResponse = await sendToAI(text);
-    hideTypingIndicator();
-    addMessage(extractAssistantText(aiResponse), false);
-  } catch (err) {
-    hideTypingIndicator();
-    addMessage(`Error: ${err.message}`, false);
+  enqueueOutgoing({ text });
+}
+
+function queueActionBatch(actions, sourceText) {
+  const normalized = normalizeActions(actions).map((action, index) => ({
+    ...action,
+    id: action.id || `action_${Date.now()}_${index}`,
+    type: normalizeActionType(action),
+    __sourceText: sourceText || '',
+  }));
+
+  if (normalized.length === 0) {
+    return;
   }
+
+  actionBatches.push({
+    id: `batch_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    createdAt: new Date().toISOString(),
+    actions: normalized,
+  });
+
+  if (!isProcessingActions) {
+    void processActionBatches();
+  }
+}
+
+async function processActionBatches() {
+  if (isProcessingActions) {
+    return;
+  }
+  isProcessingActions = true;
+
+  while (actionBatches.length > 0) {
+    const batch = actionBatches.shift();
+    if (!batch) {
+      continue;
+    }
+    const results = [];
+    for (const action of batch.actions) {
+      const result = await executeActionWithPolicy(action);
+      results.push(result);
+    }
+    if (results.length > 0) {
+      await sendActionReport(batch, results);
+    }
+  }
+
+  isProcessingActions = false;
+}
+
+function normalizeActionType(action) {
+  const raw = String(action?.type || action?.action || action?.kind || '').toLowerCase();
+  if (raw === 'tap') return 'click';
+  if (raw === 'press') return 'click';
+  if (raw === 'input') return 'type';
+  if (raw === 'goto') return 'navigate';
+  if (raw === 'open') return 'navigate';
+  if (raw === 'open_tab' || raw === 'open-tab' || raw === 'open_url' || raw === 'open-url' || raw === 'open_new_tab') {
+    return 'open_tab';
+  }
+  if (raw === 'console_logs' || raw === 'get_console_log' || raw === 'get_console' || raw === 'console') {
+    return 'get_console_logs';
+  }
+  if (raw === 'network_logs' || raw === 'get_network_log' || raw === 'get_network' || raw === 'network') {
+    return 'get_network_logs';
+  }
+  return raw;
+}
+
+function shouldBlockAction(action) {
+  const type = normalizeActionType(action);
+  return /(delete|destroy|remove|clear|erase|drop)/i.test(type);
+}
+
+function isSensitiveAction(action) {
+  if (action?.confirm === true) return true;
+  const type = normalizeActionType(action);
+  if (
+    /(login|sign[_-]?in|signin|signup|register|create[_-]?account|payment|purchase|checkout|billing|email)/i.test(
+      type,
+    )
+  ) {
+    return true;
+  }
+  const url = String(action?.url || action?.href || '');
+  if (/mail\.google\.com|gmail\.com|accounts\.google\.com/i.test(url)) {
+    return true;
+  }
+  const selector = String(action?.selector || '');
+  if (/password|passcode|credit-card|card-number/i.test(selector)) {
+    return true;
+  }
+  return false;
+}
+
+function formatActionSummary(action) {
+  const type = normalizeActionType(action) || 'action';
+  const parts = [`${type}`];
+  if (action?.url) parts.push(`url=${action.url}`);
+  if (action?.selector) parts.push(`selector=${action.selector}`);
+  if (action?.text) parts.push(`text="${String(action.text).slice(0, 80)}"`);
+  return parts.join(' ');
+}
+
+async function executeActionWithPolicy(action) {
+  const normalized = { ...action, type: normalizeActionType(action) };
+  const resultBase = {
+    id: normalized.id || null,
+    type: normalized.type || 'unknown',
+  };
+
+  const domainCheck = await ensureAllowedDomain(normalized);
+  if (!domainCheck.ok) {
+    return { ...resultBase, status: 'blocked', error: domainCheck.error || 'Domain blocked.' };
+  }
+
+  if (shouldBlockAction(normalized)) {
+    return { ...resultBase, status: 'blocked', error: 'Destructive actions are blocked.' };
+  }
+
+  if (isSensitiveAction(normalized)) {
+    const approved = window.confirm(
+      `Allow TaskingBot to perform this action?\n\n${formatActionSummary(normalized)}`,
+    );
+    if (!approved) {
+      return { ...resultBase, status: 'skipped', error: 'User denied confirmation.' };
+    }
+  }
+
+  const actionResult = await runBrowserAction(normalized);
+  if (actionResult.ok) {
+    return { ...resultBase, status: 'success', data: actionResult.data || null };
+  }
+  return {
+    ...resultBase,
+    status: 'failed',
+    error: actionResult.error || 'Unknown error',
+    data: actionResult.data || null,
+  };
+}
+
+async function runBrowserAction(action) {
+  if (!action || !action.type) {
+    return { ok: false, error: 'Invalid action' };
+  }
+
+  if (action.type === 'wait') {
+    const ms = typeof action.ms === 'number' ? action.ms : 500;
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    return { ok: true, data: { waitedMs: ms } };
+  }
+
+  if (action.type === 'screenshot') {
+    const capture = await captureScreenshot();
+    if (!capture || !capture.dataUrl) {
+      return { ok: false, error: capture?.error || 'Screenshot failed' };
+    }
+    const uploadDataUrl = await prepareImageForSend(capture.dataUrl);
+    addAttachmentMessage(capture.dataUrl, 'Action Screenshot', true);
+    const attachment = buildAttachment(uploadDataUrl, 'Action Screenshot', 'image/jpeg', null);
+    enqueueOutgoing({
+      text: `Action Screenshot (${action.id || 'screenshot'})`,
+      attachment,
+      priority: true,
+    });
+    return { ok: true, data: { screenshot: true } };
+  }
+
+  if (action.type === 'open_tab') {
+    if (!action.url) {
+      return { ok: false, error: 'Missing url for open_tab' };
+    }
+    return sendRuntimeMessage({ action: 'openTab', url: action.url });
+  }
+
+  if (action.type === 'navigate' && action.newTab) {
+    return sendRuntimeMessage({ action: 'openTab', url: action.url });
+  }
+
+  const response = await sendRuntimeMessage({ action: 'performActions', actions: [action] });
+  if (!response || response.error) {
+    return { ok: false, error: response?.error || 'No response from content script' };
+  }
+  const result = response.results && response.results[0] ? response.results[0] : null;
+  if (!result) {
+    return { ok: false, error: 'No action result returned' };
+  }
+  if (!result.ok) {
+    return { ok: false, error: result.error || 'Action failed', data: result.data || null };
+  }
+  return { ok: true, data: result.data || null };
+}
+
+async function sendActionReport(batch, results) {
+  const report = buildActionReport(batch, results);
+  enqueueOutgoing({ text: report, priority: true });
+}
+
+function buildActionReport(batch, results) {
+  const lines = [];
+  lines.push('[ACTION_REPORT]');
+  lines.push(`timestamp: ${new Date().toISOString()}`);
+  lines.push(`batch: ${batch?.id || 'unknown'}`);
+  lines.push(`count: ${results.length}`);
+  for (const result of results) {
+    const detail = summarizeActionData(result);
+    const summary = [
+      `- id=${result.id || 'n/a'}`,
+      `type=${result.type || 'unknown'}`,
+      `status=${result.status || 'unknown'}`,
+      result.error ? `error="${result.error}"` : null,
+      detail ? `data=${detail}` : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    lines.push(summary);
+  }
+  lines.push('[/ACTION_REPORT]');
+  return lines.join('\n');
+}
+
+function summarizeActionData(result) {
+  if (!result || result.data == null) {
+    return '';
+  }
+  let data = result.data;
+  if (Array.isArray(data)) {
+    data = data.slice(-MAX_ACTION_LOGS);
+  }
+  const serialized = safeStringify(data);
+  return truncateText(serialized, 2000);
+}
+
+function safeStringify(value) {
+  try {
+    return JSON.stringify(value);
+  } catch (err) {
+    return String(value);
+  }
+}
+
+function truncateText(text, limit) {
+  if (!text || typeof text !== 'string') return '';
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}...`;
+}
+
+function sendRuntimeMessage(payload) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(payload, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({ ok: false, error: chrome.runtime.lastError.message });
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+async function getActiveTabInfo() {
+  const response = await sendRuntimeMessage({ action: 'getActiveTabInfo' });
+  if (response && response.ok === false) {
+    return { url: null, title: null, error: response.error || 'Failed to get active tab' };
+  }
+  return response || { url: null, title: null };
+}
+
+function isAllowedTaskingDomain(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    if (TASKING_DOMAIN_HOSTS.includes(host)) return true;
+    return TASKING_DOMAIN_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  } catch (err) {
+    return false;
+  }
+}
+
+async function ensureAllowedDomain(action) {
+  const type = normalizeActionType(action);
+
+  if (type === 'wait') {
+    return { ok: true };
+  }
+
+  if (type === 'navigate' || type === 'open_tab') {
+    const targetUrl = action?.url || action?.href;
+    if (!targetUrl) {
+      return { ok: false, error: 'Missing url for navigation.' };
+    }
+    if (!isAllowedTaskingDomain(targetUrl)) {
+      return { ok: false, error: 'Blocked: only tasking.tech domains are allowed.' };
+    }
+    return { ok: true };
+  }
+
+  const activeTab = await getActiveTabInfo();
+  const activeUrl = activeTab?.url || '';
+  if (!activeUrl) {
+    return { ok: false, error: 'Unable to verify active tab domain.' };
+  }
+  if (!isAllowedTaskingDomain(activeUrl)) {
+    return { ok: false, error: 'Blocked: active tab is not a tasking.tech domain.' };
+  }
+  return { ok: true };
 }
 
 async function sendAttachment(
@@ -207,16 +629,8 @@ async function sendAttachment(
   addAttachmentMessage(displayDataUrl || dataUrl, filename, isImage);
   removeLegacyPreviews();
 
-  showTypingIndicator();
-  try {
-    const attachment = buildAttachment(dataUrl, filename, attachmentType, attachmentSize);
-    const aiResponse = await sendToAI(label, attachment);
-    hideTypingIndicator();
-    addMessage(extractAssistantText(aiResponse), false);
-  } catch (err) {
-    hideTypingIndicator();
-    addMessage(`Error: ${err.message}`, false);
-  }
+  const attachment = buildAttachment(dataUrl, filename, attachmentType, attachmentSize);
+  enqueueOutgoing({ text: label, attachment });
 }
 
 function addMessage(text, isUser = true) {
