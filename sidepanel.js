@@ -331,7 +331,7 @@ async function takeScreenshot() {
   }
   removeLegacyPreviews();
   const uploadDataUrl = await prepareImageForSend(result.dataUrl);
-  await sendAttachment(uploadDataUrl, 'Screenshot', result.dataUrl, true);
+  await sendAttachment(uploadDataUrl, 'Screenshot', result.dataUrl, true, 'image/jpeg');
 }
 
 function captureScreenshot() {
@@ -436,8 +436,10 @@ function handleAttachmentFile(file) {
 async function handleAttachmentData(dataUrl, file) {
   const filename = file && file.name ? file.name : 'Attachment';
   const isImage = (file && file.type ? file.type.startsWith('image/') : false) || isImageDataUrl(dataUrl);
+  const attachmentType = file && file.type ? file.type : inferDataUrlMimeType(dataUrl);
+  const attachmentSize = file && typeof file.size === 'number' ? file.size : null;
   const uploadDataUrl = isImage ? await prepareImageForSend(dataUrl) : dataUrl;
-  await sendAttachment(uploadDataUrl, filename, dataUrl, isImage);
+  await sendAttachment(uploadDataUrl, filename, dataUrl, isImage, attachmentType, attachmentSize);
 }
 
 function prepareImageForSend(dataUrl) {
@@ -469,6 +471,22 @@ function resizeImageDataUrl(dataUrl, maxWidth = 1280, quality = 0.85) {
 
 function isImageDataUrl(dataUrl) {
   return typeof dataUrl === 'string' && dataUrl.startsWith('data:image/');
+}
+
+function inferDataUrlMimeType(dataUrl) {
+  if (typeof dataUrl !== 'string') return 'application/octet-stream';
+  const match = dataUrl.match(/^data:([^;]+);/);
+  return match ? match[1] : 'application/octet-stream';
+}
+
+function buildAttachment(dataUrl, name, type, size) {
+  if (!dataUrl) return null;
+  return {
+    name: name || 'attachment',
+    type: type || inferDataUrlMimeType(dataUrl),
+    content: dataUrl,
+    size: typeof size === 'number' ? size : undefined,
+  };
 }
 
 function removeLegacyPreviews() {
