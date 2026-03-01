@@ -2,8 +2,9 @@
 console.log('sidepanel.js loaded');
 
 // === EVENT HANDLERS INIT ===
+
 // global element references
-let chatContainer, messageInput, sendBtn, screenshotBtn, screenShareBtn, attachBtn;
+let chatContainer, messageInput, sendBtn, screenshotBtn;
 
 document.addEventListener('DOMContentLoaded', () => {
   // element references
@@ -11,23 +12,21 @@ document.addEventListener('DOMContentLoaded', () => {
   messageInput = document.getElementById('messageInput');
   sendBtn = document.getElementById('sendBtn');
   screenshotBtn = document.getElementById('screenshotBtn');
-  screenShareBtn = document.getElementById('screenShareBtn');
-  attachBtn = document.getElementById('attachBtn');
 
   // event listeners
   sendBtn.addEventListener('click', sendMessage);
   messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   });
   screenshotBtn.addEventListener('click', captureScreenshot);
-  if (screenShareBtn) screenShareBtn.addEventListener('click', shareScreen);
-  if (attachBtn) attachBtn.addEventListener('click', attachFile);
 
   // load chat history
   loadChatHistory();
 });
 
-// === CHAT FUNCTIONS ===
 async function sendMessage() {
   const message = messageInput.value.trim();
   if (!message) return;
@@ -41,30 +40,46 @@ async function sendMessage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })
     });
+
     const data = await response.json();
-    addMessage(data.response, 'ai');
+    addMessage(data.response, 'assistant');
   } catch (error) {
-    addMessage('Error connecting to AI', 'ai');
+    addMessage('Error: ' + error.message, 'assistant');
   }
 }
 
-function addMessage(text, sender) {
-  const msgDiv = document.createElement('div');
-  msgDiv.className = `message ${sender}`;
-  msgDiv.textContent = text;
-  chatContainer.appendChild(msgDiv);
+function addMessage(content, role) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${role}`;
+  messageDiv.textContent = content;
+  chatContainer.appendChild(messageDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
+
+  // save to storage
+  saveChatHistory();
+}
+
+async function captureScreenshot() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  chrome.tabs.sendMessage(tab.id, { action: 'captureScreenshot' }, (response) => {
+    if (response && response.screenshot) {
+      addMessage('Screenshot captured', 'user');
+    }
+  });
+}
+
+function saveChatHistory() {
+  const messages = Array.from(chatContainer.children).map(div => ({
+    role: div.className.split(' ')[1],
+    content: div.textContent
+  }));
+  chrome.storage.local.set({ chatHistory: messages });
 }
 
 function loadChatHistory() {
-  const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-  history.forEach(msg => addMessage(msg.text, msg.sender));
-}
-
-function captureScreenshot() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
-      addMessage('Screenshot captured', 'user');
-    });
+  chrome.storage.local.get(['chatHistory'], (result) => {
+    if (result.chatHistory) {
+      result.chatHistory.forEach(msg => addMessage(msg.content, msg.role));
+    }
   });
 }

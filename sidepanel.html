@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,25 +7,13 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
+  <div id="app">
     <div class="header">
-      <div class="header-left">
-        <h1>TaskingBot AI</h1>
-      </div>
-      <div class="header-right">
-        <div id="userAvatar" class="user-avatar" style="display: none;">
-          <img id="avatarImg" src="" alt="User" class="avatar-img">
-          <span class="online-indicator"></span>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggleAI">
-          <span class="slider"></span>
-        </label>
-      </div>
+      <h1>TaskingBot AI</h1>
     </div>
     <div class="chat-container" id="chatContainer"></div>
-    <div class="input-container">
-      <input type="text" id="messageInput" placeholder="Type a message...">
+    <div class="input-area">
+      <textarea id="messageInput" placeholder="Type your message..."></textarea>
       <button id="sendBtn">Send</button>
       <button id="screenshotBtn">📸</button>
     </div>
