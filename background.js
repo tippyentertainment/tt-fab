@@ -41,9 +41,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             },
             body: JSON.stringify(request.payload),
           });
-          const data = await resp.json();
+          let data = null;
+          try {
+            data = await resp.json();
+          } catch (err) {
+            const text = await resp.text().catch(() => '');
+            data = { error: text || 'Invalid response' };
+          }
           console.log('background received response', url, data);
-          sendResponse({ result: data });
+          sendResponse({ result: data, status: resp.status, ok: resp.ok });
           return;
         } catch (err) {
           console.warn('background fetch failed for', url, err);
@@ -96,6 +102,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       }
       sendResponse({ url: tab.url || null, title: tab.title || null });
+    });
+    return true;
+  }
+
+  if (request.action === 'getSessionToken') {
+    getTaskingSessionToken().then((token) => {
+      sendResponse({ token });
     });
     return true;
   }

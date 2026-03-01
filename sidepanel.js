@@ -22,6 +22,8 @@ let attachBtn;
 let botToggle;
 let botDisabledMsg;
 let inputContainer;
+let loginContainer;
+let loginFrame;
 
 const REQUEST_TIMEOUT_MS = 30000;
 const TASKING_DOMAIN_HOSTS = ['tasking.tech'];
@@ -37,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   botToggle = document.getElementById('botToggle');
   botDisabledMsg = document.getElementById('botDisabledMsg');
   inputContainer = document.getElementById('inputContainer');
+  initLoginFrame();
   removeLegacyPreviews();
 
   if (botToggle) {
@@ -106,6 +109,72 @@ function setBotEnabled(enabled) {
   if (botDisabledMsg) {
     botDisabledMsg.style.display = enabled ? 'none' : 'block';
   }
+  if (!enabled) {
+    hideLoginFrame();
+  }
+}
+
+function initLoginFrame() {
+  if (loginContainer || !inputContainer) {
+    return;
+  }
+  loginContainer = document.createElement('div');
+  loginContainer.id = 'loginContainer';
+  loginContainer.style.display = 'none';
+  loginContainer.style.flex = '1';
+  loginContainer.style.width = '100%';
+  loginContainer.style.background = '#0d0d0d';
+  loginContainer.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
+
+  loginFrame = document.createElement('iframe');
+  loginFrame.title = 'Tasking.tech Login';
+  loginFrame.src = 'https://tasking.tech/login';
+  loginFrame.style.border = '0';
+  loginFrame.style.width = '100%';
+  loginFrame.style.height = '100%';
+  loginFrame.style.minHeight = '360px';
+  loginFrame.style.background = '#0d0d0d';
+
+  loginContainer.appendChild(loginFrame);
+
+  const parent = inputContainer.parentElement || document.body;
+  parent.insertBefore(loginContainer, inputContainer);
+}
+
+function showLoginFrame() {
+  if (!loginContainer) {
+    initLoginFrame();
+  }
+  if (chatContainer) {
+    chatContainer.style.display = 'none';
+  }
+  if (inputContainer) {
+    inputContainer.style.display = 'none';
+  }
+  if (botDisabledMsg) {
+    botDisabledMsg.style.display = 'none';
+  }
+  if (loginContainer) {
+    loginContainer.style.display = 'flex';
+  }
+}
+
+function hideLoginFrame() {
+  if (loginContainer) {
+    loginContainer.style.display = 'none';
+  }
+  if (botToggle && !botToggle.checked) {
+    if (botDisabledMsg) botDisabledMsg.style.display = 'block';
+    if (chatContainer) chatContainer.style.display = 'none';
+    if (inputContainer) inputContainer.style.display = 'none';
+    return;
+  }
+  if (chatContainer) {
+    chatContainer.style.display = 'flex';
+  }
+  if (inputContainer) {
+    inputContainer.style.display = 'block';
+  }
 }
 
 function extractAssistantText(data) {
@@ -158,8 +227,11 @@ async function sendToAI(message, attachment = null) {
         }
 
         if (response && response.result) {
-          const data = response.result;
-          resolve(data);
+          resolve({
+            data: response.result,
+            status: typeof response.status === 'number' ? response.status : 200,
+            ok: typeof response.ok === 'boolean' ? response.ok : true,
+          });
           return;
         }
 
@@ -205,27 +277,9 @@ async function processSendQueue() {
 
   try {
     const aiResponse = await sendToAI(nextItem.text, nextItem.attachment || null);
-    const rawText = extractAssistantText(aiResponse);
-    const { cleanText, actions } = extractActionsFromResponse(rawText);
-    const assistantTextForHistory =
-      cleanText && cleanText.trim().length > 0
-        ? cleanText.trim()
-        : actions.length > 0
-          ? '[Actions requested]'
-          : rawText;
-    recordConversation(nextItem.text, assistantTextForHistory);
-    hideTypingIndicator();
-
-    if (cleanText && cleanText.trim().length > 0) {
-      addMessage(cleanText, false);
-    } else if (!actions || actions.length === 0) {
-      addMessage(rawText, false);
-    } else {
-      addMessage('Executing requested actions...', false);
-    }
-
-    if (actions && actions.length > 0) {
-      queueActionBatch(actions, rawText);
+    const handled = await handleAiResult(aiResponse, nextItem);
+    if (!handled) {
+      // noop
     }
   } catch (err) {
     hideTypingIndicator();
@@ -236,6 +290,57 @@ async function processSendQueue() {
       void processSendQueue();
     }
   }
+}
+
+async function handleAiResult(aiResponse, nextItem) {
+  const rawText = extractAssistantText(aiResponse?.data);
+  if (isAuthError(aiResponse, rawText)) {
+    const authed = await ensureAuthenticatedFlow();
+    if (authed && !nextItem.authRetried) {
+      nextItem.authRetried = true;
+      const retryResponse = await sendToAI(nextItem.text, nextItem.attachment || null);
+      return handleAiResult(retryResponse, nextItem);
+    }
+    hideTypingIndicator();
+    addMessage('Login required. Please sign in at tasking.tech and retry.', false);
+    return false;
+  }
+
+  const { cleanText, actions } = extractActionsFromResponse(rawText);
+  const assistantTextForHistory =
+    cleanText && cleanText.trim().length > 0
+      ? cleanText.trim()
+      : actions.length > 0
+        ? '[Actions requested]'
+        : rawText;
+  recordConversation(nextItem.text, assistantTextForHistory);
+  hideTypingIndicator();
+
+  if (cleanText && cleanText.trim().length > 0) {
+    addMessage(cleanText, false);
+  } else if (!actions || actions.length === 0) {
+    addMessage(rawText, false);
+  } else {
+    addMessage('Executing requested actions...', false);
+  }
+
+  if (actions && actions.length > 0) {
+    queueActionBatch(actions, rawText);
+  }
+  return true;
+}
+
+function isAuthError(aiResponse, rawText) {
+  if (!aiResponse) return false;
+  if (aiResponse.status === 401) return true;
+  if (typeof rawText === 'string' && /not authenticated|unauthorized|login required/i.test(rawText)) {
+    return true;
+  }
+  const data = aiResponse.data || {};
+  if (data && typeof data.error === 'string' && /not authenticated|unauthorized/i.test(data.error)) {
+    return true;
+  }
+  return false;
 }
 
 function extractActionsFromResponse(text) {
@@ -561,6 +666,33 @@ function sendRuntimeMessage(payload) {
       resolve(response);
     });
   });
+}
+
+async function getSessionToken() {
+  const response = await sendRuntimeMessage({ action: 'getSessionToken' });
+  if (response && response.ok === false) {
+    return null;
+  }
+  return response?.token || null;
+}
+
+async function ensureAuthenticatedFlow() {
+  hideTypingIndicator();
+  addMessage('Login required. Opening tasking.tech login…', false);
+  showLoginFrame();
+  const start = Date.now();
+  const timeoutMs = 2 * 60 * 1000;
+  while (Date.now() - start < timeoutMs) {
+    const token = await getSessionToken();
+    if (token) {
+      hideLoginFrame();
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  hideLoginFrame();
+  await sendRuntimeMessage({ action: 'openTab', url: 'https://tasking.tech/login' });
+  return false;
 }
 
 async function getActiveTabInfo() {
