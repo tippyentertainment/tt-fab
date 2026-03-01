@@ -278,6 +278,12 @@ async function sendHeartbeat() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        extension_id: chrome.runtime.id,
+        capabilities: [
+          'screenshot', 'screen_capture', 'navigate', 'open_tab',
+          'click', 'type', 'submit', 'scroll', 'extract',
+          'get_console_logs', 'get_network_logs', 'wait',
+        ],
         tab_url: activeTab?.url || null,
         tab_title: activeTab?.title || null,
       }),
@@ -320,6 +326,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       let lastError;
       const sessionToken = await getTaskingSessionToken();
       const authHeader = sessionToken ? `Bearer ${sessionToken}` : '';
+
+      // Inject current tab context so the bridge auto-registers the session
+      // with the correct URL/title (AI needs this to know what page the user is on)
+      const activeTabs = await new Promise((resolve) => {
+        chrome.tabs.query({ active: true, lastFocusedWindow: true }, resolve);
+      });
+      const currentTab = activeTabs && activeTabs[0];
+      const enrichedPayload = {
+        ...request.payload,
+        tab_url: currentTab?.url || null,
+        tab_title: currentTab?.title || null,
+      };
+
       for (const url of tryUrls) {
         try {
           const resp = await fetch(url, {
@@ -329,7 +348,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               'Content-Type': 'application/json',
               ...(authHeader ? { Authorization: authHeader } : {}),
             },
-            body: JSON.stringify(request.payload),
+            body: JSON.stringify(enrichedPayload),
           });
           let data = null;
           try {
