@@ -18,6 +18,9 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://tasking.tech https://*.tasking.tech; img-src 'self' data: https://tasking.tech https://*.tasking.tech; connect-src https://tasking.tech https://*.tasking.tech; style-src 'self' 'unsafe-inline'"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
