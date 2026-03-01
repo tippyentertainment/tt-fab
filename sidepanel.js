@@ -13,6 +13,12 @@ const actionBatches = [];
 let isProcessingActions = false;
 const MAX_ACTION_LOGS = 50;
 
+// ── Screen Share State ──────────────────────────────────────────────
+// Holds the active screen share MediaStream + video element so background.js
+// can request frame captures for the autonomous AI pipeline.
+let activeScreenShareStream = null;
+let activeScreenShareVideo = null;
+
 let chatContainer;
 let messageInput;
 let sendBtn;
@@ -583,6 +589,38 @@ async function runBrowserAction(action) {
     return { ok: true, data: { screenshot: true, image_base64: imageBase64 } };
   }
 
+  if (action.type === 'screen_capture') {
+    // Capture from active screen share (full desktop/window), fall back to tab screenshot
+    const frame = captureScreenShareFrame();
+    if (frame && frame.dataUrl) {
+      const uploadDataUrl = await prepareImageForSend(frame.dataUrl);
+      addAttachmentMessage(frame.dataUrl, 'Screen Capture', true);
+      const attachment = buildAttachment(uploadDataUrl, 'Screen Capture', 'image/png', null);
+      enqueueOutgoing({
+        text: `Screen Capture (${action.id || 'screen_capture'})`,
+        attachment,
+        priority: true,
+      });
+      const base64Match = uploadDataUrl.match(/^data:[^;]+;base64,(.+)$/);
+      return { ok: true, data: { screenshot: true, source: 'screen_share', image_base64: base64Match ? base64Match[1] : null } };
+    }
+    // Fall back to tab screenshot if no screen share active
+    const capture = await captureScreenshot();
+    if (!capture || !capture.dataUrl) {
+      return { ok: false, error: 'No active screen share and tab screenshot failed' };
+    }
+    const uploadDataUrl = await prepareImageForSend(capture.dataUrl);
+    addAttachmentMessage(capture.dataUrl, 'Tab Screenshot (no screen share)', true);
+    const attachment = buildAttachment(uploadDataUrl, 'Tab Screenshot', 'image/jpeg', null);
+    enqueueOutgoing({
+      text: `Tab Screenshot fallback (${action.id || 'screen_capture'})`,
+      attachment,
+      priority: true,
+    });
+    const base64Match = uploadDataUrl.match(/^data:[^;]+;base64,(.+)$/);
+    return { ok: true, data: { screenshot: true, source: 'tab_fallback', image_base64: base64Match ? base64Match[1] : null } };
+  }
+
   if (action.type === 'open_tab') {
     if (!action.url) {
       return { ok: false, error: 'Missing url for open_tab' };
@@ -728,7 +766,7 @@ async function ensureAllowedDomain(action) {
   // Security is handled by shouldBlockAction() (destructive actions)
   // and isSensitiveAction() (login, payment, etc. require user confirm).
 
-  if (type === 'wait' || type === 'screenshot' || type === 'get_console_logs' || type === 'get_network_logs') {
+  if (type === 'wait' || type === 'screenshot' || type === 'screen_capture' || type === 'get_console_logs' || type === 'get_network_logs') {
     return { ok: true };
   }
 
@@ -912,6 +950,9 @@ async function startScreenShare() {
     return;
   }
 
+  // Store globally so background.js can request frame captures
+  activeScreenShareStream = stream;
+
   const video = document.createElement('video');
   video.srcObject = stream;
   video.autoplay = true;
@@ -921,14 +962,27 @@ async function startScreenShare() {
   video.style.margin = '10px 0';
   video.style.borderRadius = '10px';
   video.style.display = 'block';
+  activeScreenShareVideo = video;
 
   const stopBtn = document.createElement('button');
   stopBtn.textContent = 'Stop';
   stopBtn.style.marginTop = '8px';
   stopBtn.addEventListener('click', () => {
     stream.getTracks().forEach((track) => track.stop());
+    activeScreenShareStream = null;
+    activeScreenShareVideo = null;
     stopBtn.remove();
     video.remove();
+  });
+
+  // Also clean up if the stream ends externally (user stops from browser UI)
+  stream.getVideoTracks().forEach((track) => {
+    track.addEventListener('ended', () => {
+      activeScreenShareStream = null;
+      activeScreenShareVideo = null;
+      stopBtn.remove();
+      video.remove();
+    });
   });
 
   const message = document.createElement('div');
@@ -1050,3 +1104,63 @@ function removeLegacyPreviews() {
     attachmentPreview.remove();
   }
 }
+
+// ── Screen Share Frame Capture ──────────────────────────────────────
+// Grabs a single frame from the active screen share video stream,
+// renders it to a canvas, and returns as a base64 PNG data URL.
+
+function captureScreenShareFrame() {
+  if (!activeScreenShareStream || !activeScreenShareVideo) {
+    return { error: 'No active screen share', dataUrl: null };
+  }
+
+  const video = activeScreenShareVideo;
+  if (video.readyState < 2) {
+    return { error: 'Screen share video not ready', dataUrl: null };
+  }
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1920;
+    canvas.height = video.videoHeight || 1080;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/png');
+    return { dataUrl, error: null };
+  } catch (err) {
+    return { error: err.message || 'Frame capture failed', dataUrl: null };
+  }
+}
+
+function isScreenShareActive() {
+  if (!activeScreenShareStream) return false;
+  const tracks = activeScreenShareStream.getVideoTracks();
+  return tracks.length > 0 && tracks[0].readyState === 'live';
+}
+
+// ── Message Listener ────────────────────────────────────────────────
+// Handles requests from background.js for screen share frame captures
+// and screen share status checks.
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'captureScreenShareFrame') {
+    const result = captureScreenShareFrame();
+    sendResponse(result);
+    return false;
+  }
+
+  if (request.action === 'isScreenShareActive') {
+    sendResponse({ active: isScreenShareActive() });
+    return false;
+  }
+
+  if (request.action === 'startScreenShareForCapture') {
+    // Trigger screen share from background (autonomous AI needs it)
+    startScreenShare().then(() => {
+      sendResponse({ started: isScreenShareActive() });
+    }).catch((err) => {
+      sendResponse({ started: false, error: err.message || 'Failed to start screen share' });
+    });
+    return true; // async response
+  }
+});

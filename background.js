@@ -137,6 +137,32 @@ async function executeQueuedAction(action) {
       };
     }
 
+    if (type === 'screen_capture') {
+      // Capture a frame from the active screen share (getDisplayMedia stream)
+      // This sees the full desktop/window, not just the Chrome tab
+      const frameResult = await sendToSidePanel({ action: 'captureScreenShareFrame' });
+      if (!frameResult || frameResult.error) {
+        // Screen share not active — fall back to tab screenshot
+        console.log('[Queue] No active screen share, falling back to tab screenshot');
+        const tabScreenshot = await captureScreenshotAsync();
+        if (!tabScreenshot) {
+          return { ...resultBase, status: 'failed', error: frameResult?.error || 'No screen share active and tab screenshot failed' };
+        }
+        const tabB64 = tabScreenshot.match(/^data:[^;]+;base64,(.+)$/);
+        return {
+          ...resultBase,
+          status: 'success',
+          data: { screenshot: true, source: 'tab_fallback', image_base64: tabB64 ? tabB64[1] : null },
+        };
+      }
+      const b64 = frameResult.dataUrl ? frameResult.dataUrl.match(/^data:[^;]+;base64,(.+)$/) : null;
+      return {
+        ...resultBase,
+        status: 'success',
+        data: { screenshot: true, source: 'screen_share', image_base64: b64 ? b64[1] : null },
+      };
+    }
+
     if (type === 'open_tab' || (type === 'navigate' && action.newTab)) {
       if (!action.url) {
         return { ...resultBase, status: 'failed', error: 'Missing url' };
@@ -195,6 +221,7 @@ function normalizeQueueActionType(action) {
   if (raw === 'open_tab' || raw === 'open-tab' || raw === 'open_url' || raw === 'open_new_tab') return 'open_tab';
   if (raw === 'console_logs' || raw === 'get_console_log' || raw === 'console') return 'get_console_logs';
   if (raw === 'network_logs' || raw === 'get_network_log' || raw === 'network') return 'get_network_logs';
+  if (raw === 'screen_capture' || raw === 'screen-capture' || raw === 'screencapture' || raw === 'capture_screen' || raw === 'full_screenshot' || raw === 'desktop_screenshot') return 'screen_capture';
   return raw;
 }
 
@@ -400,6 +427,21 @@ function sendToActiveTab(message) {
         }
         resolve(response);
       });
+    });
+  });
+}
+
+// Send message to the sidepanel (extension page) via chrome.runtime.sendMessage.
+// The sidepanel listens with chrome.runtime.onMessage.
+function sendToSidePanel(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[Queue] sendToSidePanel error:', chrome.runtime.lastError.message);
+        resolve(null);
+        return;
+      }
+      resolve(response || null);
     });
   });
 }
