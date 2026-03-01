@@ -1,5 +1,152 @@
 /* TaskingBot FAB Styles - Dark Theme */
 
+/* === AUTH SECTION STYLES === */
+.auth-section {
+  padding: 16px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.auth-loading {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #333;
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.auth-logged-out {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oauth-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #0d0d0d;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.oauth-btn:hover {
+  background: #1a1a1a;
+  border-color: #8b5cf6;
+}
+
+.oauth-btn svg {
+  flex-shrink: 0;
+}
+
+.google-btn:hover {
+  border-color: #4285F4;
+}
+
+.github-btn:hover {
+  border-color: #fff;
+}
+
+.microsoft-btn:hover {
+  border-color: #00A4EF;
+}
+
+.auth-logged-in {
+  display: flex;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.user-avatar-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #8b5cf6;
+}
+
+.online-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: #10b981;
+  border: 2px solid #1a1a1a;
+  border-radius: 50%;
+}
+
+.user-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.signout-btn {
+  padding: 6px 12px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.signout-btn:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}
+
+/* === EXISTING STYLES === */
 #taskingbot-fab {
   position: fixed;
   bottom: 24px;
@@ -132,184 +279,71 @@
 .fab-message {
   max-width: 85%;
   padding: 12px 16px;
-  border-radius: 16px;
+  border-radius: 12px;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.5;
+  word-wrap: break-word;
 }
 
 .fab-message.user {
-  align-self: flex-end;
-  background: #FF6B00;
+  background: #8b5cf6;
   color: white;
+  align-self: flex-end;
   border-bottom-right-radius: 4px;
 }
 
-.fab-message.bot {
-  align-self: flex-start;
+.fab-message.assistant {
   background: #1a1a1a;
-  color: #e0e0e0;
-  border-bottom-left-radius: 4px;
-  border: 1px solid #2a2a2a;
-}
-
-.message-attachments {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.message-attachments img {
-  max-width: 100%;
-  border-radius: 8px;
-}
-
-.file-attachment {
-  background: rgba(255, 107, 0, 0.2);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-#fab-input-area {
-  border-top: 1px solid #2a2a2a;
-  padding: 12px;
-  background: #1a1a1a;
-}
-
-#fab-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.attachment-preview {
-  position: relative;
-  background: #2a2a2a;
-  border-radius: 8px;
-  padding: 4px;
-}
-
-.attachment-preview img {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
-  border-radius: 4px;
-}
-
-.attachment-preview button {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #FF6B00;
   color: white;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
 }
 
-.attachment-preview button:hover {
-  background: #FF8C00;
-}
-
-#fab-input-row {
+#fab-input-container {
   display: flex;
   gap: 8px;
-  align-items: center;
-}
-
-#fab-input-row button {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
-  transition: background 0.2s;
-}
-
-#fab-input-row button:hover {
-  background: #2a2a2a;
+  padding: 16px;
+  background: #1a1a1a;
+  border-top: 1px solid #2a2a2a;
 }
 
 #fab-input {
   flex: 1;
-  padding: 10px 14px;
-  border: 1px solid #2a2a2a;
-  border-radius: 20px;
-  font-size: 14px;
-  outline: none;
+  padding: 12px 16px;
+  border: 1px solid #333;
+  border-radius: 8px;
   background: #0d0d0d;
   color: white;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#fab-input:focus {
+  border-color: #8b5cf6;
 }
 
 #fab-input::placeholder {
   color: #666;
 }
 
-#fab-input:focus {
-  border-color: #FF6B00;
-}
-
 #fab-send {
-  background: #FF6B00;
-  color: white;
+  padding: 12px 20px;
   border: none;
-  padding: 10px 20px;
-  border-radius: 20px;
+  border-radius: 8px;
+  background: #8b5cf6;
+  color: white;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
-}
-
-#fab-send:hover {
-  background: #FF8C00;
-  transform: scale(1.05);
-}
-
-/* Context Menu */
-#fab-context-menu {
-  position: fixed;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 9999999;
-  min-width: 160px;
-  overflow: hidden;
-}
-
-#fab-context-menu .menu-item {
-  padding: 10px 16px;
-  color: #e0e0e0;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
   transition: background 0.2s;
 }
 
-#fab-context-menu .menu-item:hover {
-  background: #FF6B00;
-  color: white;
+#fab-send:hover {
+  background: #7c3aed;
 }
 
-#fab-context-menu .menu-item.danger {
-  color: #ff4444;
-}
-
-#fab-context-menu .menu-item.danger:hover {
-  background: #ff4444;
-  color: white;
-}
-
-#fab-context-menu .menu-divider {
-  height: 1px;
-  background: #2a2a2a;
-  margin: 4px 0;
+#fab-send:disabled {
+  background: #333;
+  cursor: not-allowed;
 }
