@@ -1,9 +1,8 @@
 // TaskingBot FAB - Content Script
-
 (function() {
   'use strict';
 
-n  // State
+  // State
   let isOpen = false;
   let messages = JSON.parse(localStorage.getItem('taskingbot_messages') || '[]');
 
@@ -11,76 +10,29 @@ n  // State
   const fab = document.createElement('div');
   fab.id = 'taskingbot-fab';
   fab.innerHTML = `
-    <div class="fab-container">
-      <div class="fab-header">
-        <div class="fab-title">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-            <line x1="9" y1="9" x2="9.01" y2="9"/>
-            <line x1="15" y1="9" x2="15.01" y2="9"/>
-          </svg>
-          <span>TaskingBot</span>
-        </div>
-        <button class="fab-close" title="Close">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
+    <div id="fab-button">
+      <img src="https://tasking.tech/favicon.ico" alt="TaskingBot">
+    </div>
+    <div id="fab-panel">
+      <div id="fab-header">
+        <img src="https://tasking.tech/favicon.ico" alt="TaskingBot">
+        <span>TaskingBot</span>
+        <button id="fab-close">&times;</button>
       </div>
-      
-      <div class="fab-messages" id="fab-messages">
-        <div class="fab-welcome">
-          <p>👋 Hi! I'm TaskingBot, your AI assistant.</p>
-          <p>Ask me anything or use the tools below!</p>
-        </div>
+      <div id="fab-messages">
+        <div class="fab-message bot">👋 Hi! I'm TaskingBot, your AI assistant. Ask me anything or use the tools below!</div>
       </div>
-      
-      <div class="fab-input-area">
-        <div class="fab-input-container">
-          <input type="text" id="fab-input" placeholder="Type a message..." />
-          <button id="fab-send" class="fab-send-btn" title="Send message">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
-        </div>
-        
-        <div class="fab-actions">
-          <button class="fab-action-btn" id="fab-screenshot" title="Take Screenshot">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-          </button>
-          <button class="fab-action-btn" id="fab-clipboard" title="Paste from Clipboard">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-            </svg>
-          </button>
-          <button class="fab-action-btn" id="fab-attach" title="Attach File">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-            </svg>
-          </button>
-        </div>
+      <div id="fab-input-container">
+        <input type="text" id="fab-input" placeholder="Type your message...">
+        <button id="fab-send">Send</button>
+      </div>
+      <div id="fab-tools">
+        <button id="fab-screenshot" title="Take Screenshot">📸</button>
+        <button id="fab-clipboard" title="Read Clipboard">📋</button>
+        <button id="fab-attach" title="Attach File">📎</button>
       </div>
     </div>
-    
-    <button class="fab-toggle" id="fab-toggle" title="Open TaskingBot">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-        <line x1="9" y1="9" x2="9.01" y2="9"/>
-        <line x1="15" y1="9" x2="15.01" y2="9"/>
-      </svg>
-    </button>
   `;
-
   document.body.appendChild(fab);
 
   // Elements
@@ -119,16 +71,13 @@ n  // State
     // Show typing indicator
     const typingDiv = document.createElement('div');
     typingDiv.className = 'fab-message fab-bot fab-typing';
-    typingDiv.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    typingDiv.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
     messagesContainer.appendChild(typingDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     try {
       // Send to background script which calls the API
-      const response = await chrome.runtime.sendMessage({
-        action: 'chat',
-        message: text
-      });
+      const response = await chrome.runtime.sendMessage({ action: 'chat', message: text });
 
       // Remove typing indicator
       typingDiv.remove();
@@ -142,91 +91,64 @@ n  // State
       }
     } catch (error) {
       typingDiv.remove();
-      addMessage('bot', 'Error connecting to TaskingBot. Please try again.');
-      console.error('FAB error:', error);
+      addMessage('bot', `Error: ${error.message}`);
     }
   }
 
-  sendBtn.addEventListener('click', sendMessage);
-  input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      sendMessage();
-    }
-  });
-
-  // Add message to UI and storage
+  // Add message to chat
   function addMessage(role, content) {
-    const msg = { role, content, timestamp: Date.now() };
-    messages.push(msg);
+    messages.push({ role, content, timestamp: Date.now() });
     localStorage.setItem('taskingbot_messages', JSON.stringify(messages));
     renderMessages();
   }
 
   // Render messages
   function renderMessages() {
-    const welcomeMsg = messagesContainer.querySelector('.fab-welcome');
-    
-    // Clear old messages except welcome
-    Array.from(messagesContainer.children).forEach(child => {
-      if (child !== welcomeMsg) {
-        child.remove();
-      }
-    });
-
-    // Add stored messages
+    messagesContainer.innerHTML = '';
     messages.forEach(msg => {
-      const msgDiv = document.createElement('div');
-      msgDiv.className = `fab-message fab-${msg.role}`;
-      msgDiv.innerHTML = `<div class="fab-message-content">${escapeHtml(msg.content)}</div>`;
-      messagesContainer.appendChild(msgDiv);
+      const div = document.createElement('div');
+      div.className = `fab-message ${msg.role === 'user' ? 'user' : 'bot'}`;
+      div.textContent = msg.content;
+      messagesContainer.appendChild(div);
     });
-
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   // Screenshot
   screenshotBtn.addEventListener('click', async () => {
     try {
-      const dataUrl = await captureVisibleTab();
-      addMessage('user', '[Screenshot captured]');
-      addMessage('bot', 'Screenshot captured! I can analyze it once the API is connected.');
+      const response = await chrome.runtime.sendMessage({ action: 'captureScreenshot' });
+      if (response && response.screenshot) {
+        addMessage('bot', '📸 Screenshot captured! Analyzing...');
+        // Send to AI for analysis
+        const aiResponse = await chrome.runtime.sendMessage({
+          action: 'chat',
+          message: 'Analyze this screenshot',
+          attachment: response.screenshot
+        });
+        if (aiResponse && aiResponse.reply) {
+          addMessage('bot', aiResponse.reply);
+        }
+      }
     } catch (error) {
-      addMessage('bot', 'Failed to capture screenshot. Please try again.');
+      addMessage('bot', `Screenshot error: ${error.message}`);
     }
   });
 
-  async function captureVisibleTab() {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ action: 'screenshot' }, (response) => {
-        if (response && response.dataUrl) {
-          resolve(response.dataUrl);
-        } else {
-          reject(new Error('Screenshot failed'));
-        }
-      });
-    });
-  }
-
-  // Clipboard paste
+  // Clipboard
   clipboardBtn.addEventListener('click', async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
         input.value = text;
-        input.focus();
+        addMessage('bot', '📋 Clipboard content pasted. Ready to send!');
       }
     } catch (error) {
-      addMessage('bot', 'Failed to read clipboard. Please paste manually.');
+      addMessage('bot', `Clipboard error: ${error.message}`);
     }
   });
 
-  // File attachment
+  // Attach file
   attachBtn.addEventListener('click', () => {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -234,20 +156,82 @@ n  // State
     fileInput.onchange = async (e) => {
       const file = e.target.files[0];
       if (file) {
-        addMessage('user', `[Attached: ${file.name}]`);
-        addMessage('bot', `File "${file.name}" attached. I can process it once the API is connected.`);
+        addMessage('bot', `📎 File attached: ${file.name}`);
+        // Handle file upload
       }
     };
     fileInput.click();
   });
 
-  // Context menu for selected text
-  document.addEventListener('mouseup', () => {
-    const selection = window.getSelection().toString().trim();
-    if (selection && selection.length > 10) {
-      // Store selection for context menu
-      localStorage.setItem('taskingbot_selection', selection);
+  // Listen for messages from background script
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // Browser automation: Fill form
+    if (request.action === 'fillForm') {
+      try {
+        const { selector, value } = request;
+        const element = document.querySelector(selector);
+        if (element) {
+          element.value = value;
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          sendResponse({ success: true });
+        } else {
+          sendResponse({ error: 'Element not found' });
+        }
+      } catch (error) {
+        sendResponse({ error: error.message });
+      }
+      return true;
+    }
+
+    // Browser automation: Click element
+    if (request.action === 'clickElement') {
+      try {
+        const { selector } = request;
+        const element = document.querySelector(selector);
+        if (element) {
+          element.click();
+          sendResponse({ success: true });
+        } else {
+          sendResponse({ error: 'Element not found' });
+        }
+      } catch (error) {
+        sendResponse({ error: error.message });
+      }
+      return true;
+    }
+
+    // Browser automation: Extract content
+    if (request.action === 'extractContent') {
+      try {
+        const { selector } = request;
+        if (selector) {
+          const element = document.querySelector(selector);
+          sendResponse({ content: element ? element.textContent : null });
+        } else {
+          sendResponse({ content: document.body.textContent });
+        }
+      } catch (error) {
+        sendResponse({ error: error.message });
+      }
+      return true;
+    }
+
+    // Browser automation: Get page info
+    if (request.action === 'getPageInfo') {
+      try {
+        sendResponse({
+          url: window.location.href,
+          title: document.title,
+          content: document.body.textContent.substring(0, 5000)
+        });
+      } catch (error) {
+        sendResponse({ error: error.message });
+      }
+      return true;
     }
   });
 
+  // Initialize
+  renderMessages();
 })();
