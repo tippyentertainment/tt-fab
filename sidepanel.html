@@ -118,6 +118,8 @@
       color: #fff;
       font-size: 14px;
       outline: none;
+      resize: none;
+      line-height: 1.4;
     }
     
     .message-input::placeholder {
@@ -200,7 +202,7 @@
   </div>
   <div class="input-container" id="inputContainer">
     <div class="input-wrapper" style="gap:8px;">
-      <input type="text" class="message-input" id="messageInput" placeholder="Type a message..." />
+      <textarea class="message-input" id="messageInput" placeholder="Type a message..." rows="1"></textarea>
       <button class="send-button" id="sendButton">
         <svg viewBox="0 0 24 24">
           <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -219,9 +221,6 @@
       </div>
     </div>
   </div>
-  <!-- preview containers for screenshots and attachments -->
-  <div id="screenshotPreview" style="display:none; padding: 16px;"></div>
-  <div id="attachmentPreview" style="display:none; padding: 16px;"></div>
   <script src="sidepanel.js"></script>
 </body>
 </html>

@@ -16,8 +16,8 @@ let attachBtn;
 let botToggle;
 let botDisabledMsg;
 let inputContainer;
-let screenshotPreview;
-let attachmentPreview;
+
+const REQUEST_TIMEOUT_MS = 30000;
 
 document.addEventListener('DOMContentLoaded', () => {
   chatContainer = document.getElementById('chat');
@@ -29,8 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   botToggle = document.getElementById('botToggle');
   botDisabledMsg = document.getElementById('botDisabledMsg');
   inputContainer = document.getElementById('inputContainer');
-  screenshotPreview = document.getElementById('screenshotPreview');
-  attachmentPreview = document.getElementById('attachmentPreview');
+  removeLegacyPreviews();
 
   if (botToggle) {
     botToggle.addEventListener('change', () => {
@@ -41,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (messageInput) {
     messageInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         if (sendBtn) {
           sendBtn.click();
@@ -77,15 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('paste', (event) => {
     if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length > 0) {
       const file = event.clipboardData.files[0];
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (!ev.target || typeof ev.target.result !== 'string') {
-          return;
-        }
-        showAttachmentPreview(ev.target.result, file.name);
-        void sendMessageWithAttachment(ev.target.result, file.name);
-      };
-      reader.readAsDataURL(file);
+      void handleAttachmentFile(file);
     }
   });
 
@@ -130,20 +121,29 @@ async function getUserInfo() {
   });
 }
 
-async function sendToAI(message, screenshotData = null) {
+async function sendToAI(message, attachment = null) {
   const userInfo = await getUserInfo();
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      settled = true;
+      reject(new Error('Request timed out while sending attachment.'));
+    }, REQUEST_TIMEOUT_MS);
     chrome.runtime.sendMessage(
       {
         action: 'sendToAI',
         payload: {
           message,
           history: conversationHistory,
-          screenshot: screenshotData,
+          attachment: attachment || undefined,
           userId: userInfo.userId,
         },
       },
       (response) => {
+        if (settled) {
+          return;
+        }
+        clearTimeout(timeoutId);
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
           return;
@@ -190,18 +190,27 @@ async function sendMessage() {
   }
 }
 
-async function sendMessageWithAttachment(dataUrl, filename) {
+async function sendAttachment(
+  dataUrl,
+  filename,
+  displayDataUrl = null,
+  isImage = false,
+  attachmentType = null,
+  attachmentSize = null,
+) {
   if (botToggle && !botToggle.checked) {
     addMessage('Bot is turned off.', false);
     return;
   }
 
-  const label = filename ? `Attachment sent: ${filename}` : 'Attachment sent.';
-  addMessage(label, true);
+  const label = filename ? `Attachment: ${filename}` : 'Attachment';
+  addAttachmentMessage(displayDataUrl || dataUrl, filename, isImage);
+  removeLegacyPreviews();
 
   showTypingIndicator();
   try {
-    const aiResponse = await sendToAI(label, dataUrl);
+    const attachment = buildAttachment(dataUrl, filename, attachmentType, attachmentSize);
+    const aiResponse = await sendToAI(label, attachment);
     hideTypingIndicator();
     addMessage(extractAssistantText(aiResponse), false);
   } catch (err) {
@@ -250,6 +259,46 @@ function addMessage(text, isUser = true) {
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+function addAttachmentMessage(dataUrl, filename, isImage = false) {
+  if (!chatContainer) {
+    return;
+  }
+
+  const msg = document.createElement('div');
+  msg.className = 'message user';
+
+  const avatar = document.createElement('img');
+  avatar.className = 'avatar';
+  avatar.src = USER_AVATAR;
+  avatar.onerror = () => {
+    avatar.src = USER_AVATAR_FALLBACK;
+  };
+
+  const content = document.createElement('div');
+  content.style.display = 'flex';
+  content.style.flexDirection = 'column';
+  content.style.gap = '6px';
+
+  if (isImage && isImageDataUrl(dataUrl)) {
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.style.maxWidth = '180px';
+    img.style.maxHeight = '180px';
+    img.style.borderRadius = '8px';
+    img.style.objectFit = 'cover';
+    content.appendChild(img);
+  }
+
+  const label = document.createElement('span');
+  label.textContent = filename || 'Attachment';
+  content.appendChild(label);
+
+  msg.appendChild(avatar);
+  msg.appendChild(content);
+  chatContainer.appendChild(msg);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
 function showTypingIndicator() {
   if (!chatContainer) {
     return;
@@ -274,19 +323,33 @@ function hideTypingIndicator() {
 }
 
 async function takeScreenshot() {
-  const dataUrl = await captureScreenshot();
-  if (!dataUrl) {
-    addMessage('Screenshot failed.', false);
+  const result = await captureScreenshot();
+  if (!result || !result.dataUrl) {
+    const message = result && result.error ? `Screenshot failed: ${result.error}` : 'Screenshot failed.';
+    addMessage(message, false);
     return;
   }
-  await showScreenshotPreview(dataUrl);
-  await sendMessageWithAttachment(dataUrl, 'Screenshot');
+  removeLegacyPreviews();
+  const uploadDataUrl = await prepareImageForSend(result.dataUrl);
+  await sendAttachment(uploadDataUrl, 'Screenshot', result.dataUrl, true);
 }
 
 function captureScreenshot() {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'captureScreenshot' }, (response) => {
-      resolve(response && response.screenshot ? response.screenshot : null);
+      if (chrome.runtime.lastError) {
+        resolve({ error: chrome.runtime.lastError.message, dataUrl: null });
+        return;
+      }
+      if (!response) {
+        resolve({ error: 'No response from background.', dataUrl: null });
+        return;
+      }
+      if (response.error) {
+        resolve({ error: response.error, dataUrl: null });
+        return;
+      }
+      resolve({ dataUrl: response.screenshot || null, error: null });
     });
   });
 }
@@ -354,75 +417,67 @@ function openFilePicker() {
     if (!file) {
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (!ev.target || typeof ev.target.result !== 'string') {
-        return;
-      }
-      showAttachmentPreview(ev.target.result, file.name);
-      void sendMessageWithAttachment(ev.target.result, file.name);
-    };
-    reader.readAsDataURL(file);
+    void handleAttachmentFile(file);
   };
   fileInput.click();
 }
 
-function showScreenshotPreview(dataUrl) {
-  if (!screenshotPreview) {
-    return Promise.resolve();
-  }
-
-  return createThumbnail(dataUrl, 200)
-    .then((thumbUrl) => {
-      screenshotPreview.innerHTML = `<img src="${thumbUrl}" style="max-width:200px;border-radius:8px;" />`;
-      screenshotPreview.style.display = 'block';
-    })
-    .catch(() => {
-      screenshotPreview.innerHTML = `<img src="${dataUrl}" style="max-width:200px;border-radius:8px;" />`;
-      screenshotPreview.style.display = 'block';
-    });
+function handleAttachmentFile(file) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    if (!ev.target || typeof ev.target.result !== 'string') {
+      return;
+    }
+    void handleAttachmentData(ev.target.result, file);
+  };
+  reader.readAsDataURL(file);
 }
 
-function showAttachmentPreview(dataUrl, filename) {
-  if (!attachmentPreview) {
-    return;
-  }
-
-  if (dataUrl.startsWith('data:image/')) {
-    attachmentPreview.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <img src="${dataUrl}" style="max-width:100px;max-height:100px;border-radius:8px;" />
-        <span>${filename || 'Attachment'}</span>
-      </div>
-    `;
-  } else {
-    attachmentPreview.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span>${filename || 'Attachment'}</span>
-      </div>
-    `;
-  }
-
-  attachmentPreview.style.display = 'block';
+async function handleAttachmentData(dataUrl, file) {
+  const filename = file && file.name ? file.name : 'Attachment';
+  const isImage = (file && file.type ? file.type.startsWith('image/') : false) || isImageDataUrl(dataUrl);
+  const uploadDataUrl = isImage ? await prepareImageForSend(dataUrl) : dataUrl;
+  await sendAttachment(uploadDataUrl, filename, dataUrl, isImage);
 }
 
-function createThumbnail(dataUrl, maxWidth = 200) {
+function prepareImageForSend(dataUrl) {
+  return resizeImageDataUrl(dataUrl, 1024, 0.8).catch(() => dataUrl);
+}
+
+function resizeImageDataUrl(dataUrl, maxWidth = 1280, quality = 0.85) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const targetWidth = Math.max(1, Math.round(img.width * scale));
+      const targetHeight = Math.max(1, Math.round(img.height * scale));
       const canvas = document.createElement('canvas');
-      const scale = maxWidth / img.width;
-      canvas.width = maxWidth;
-      canvas.height = img.height * scale;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         reject(new Error('No canvas context'));
         return;
       }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/png'));
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+      resolve(canvas.toDataURL('image/jpeg', quality));
     };
     img.onerror = () => reject(new Error('Image load failed'));
     img.src = dataUrl;
   });
+}
+
+function isImageDataUrl(dataUrl) {
+  return typeof dataUrl === 'string' && dataUrl.startsWith('data:image/');
+}
+
+function removeLegacyPreviews() {
+  const screenshotPreview = document.getElementById('screenshotPreview');
+  const attachmentPreview = document.getElementById('attachmentPreview');
+  if (screenshotPreview) {
+    screenshotPreview.remove();
+  }
+  if (attachmentPreview) {
+    attachmentPreview.remove();
+  }
 }
