@@ -278,8 +278,8 @@ async function sendHeartbeat() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        tabUrl: activeTab?.url || null,
-        tabTitle: activeTab?.title || null,
+        tab_url: activeTab?.url || null,
+        tab_title: activeTab?.title || null,
       }),
     });
   } catch (err) {
