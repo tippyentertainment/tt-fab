@@ -3,14 +3,7 @@
   "name": "TaskingBot",
   "version": "1.0",
   "description": "AI assistant floating action button",
-  "permissions": [
-    "activeTab",
-    "sidePanel",
-    "tabs",
-    "storage",
-    "scripting",
-    "identity"
-  ],
+  "permissions": ["activeTab", "sidePanel", "tabs", "storage"],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
@@ -22,17 +15,9 @@
     "default_path": "sidepanel.html"
   },
   "host_permissions": [
-    "https://tasking.tech/*",
-    "https://*.tasking.tech/*"
+    "https://tasking.tech/*"
   ],
   "background": {
     "service_worker": "background.js"
-  },
-  "oauth2": {
-    "client_id": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
-    ]
   }
 }
