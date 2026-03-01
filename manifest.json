@@ -4,6 +4,7 @@
   "version": "1.0",
   "description": "AI assistant floating action button",
   "permissions": ["activeTab", "sidePanel", "tabs", "storage"],
+  "host_permissions": ["https://tasking.tech/*"],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
