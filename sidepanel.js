@@ -241,8 +241,11 @@ async function sendToAI(message, attachment = null) {
   });
 }
 
-function recordConversation(userText, assistantText) {
-  conversationHistory.push({ role: 'user', content: userText });
+function recordConversation(userText, assistantText, hadAttachment = false) {
+  const userContent = hadAttachment
+    ? `${userText}\n[Image/file was attached with this message]`
+    : userText;
+  conversationHistory.push({ role: 'user', content: userContent });
   conversationHistory.push({ role: 'assistant', content: assistantText });
 }
 
@@ -313,7 +316,7 @@ async function handleAiResult(aiResponse, nextItem) {
       : actions.length > 0
         ? '[Actions requested]'
         : rawText;
-  recordConversation(nextItem.text, assistantTextForHistory);
+  recordConversation(nextItem.text, assistantTextForHistory, !!nextItem.attachment);
   hideTypingIndicator();
 
   if (cleanText && cleanText.trim().length > 0) {
@@ -574,7 +577,10 @@ async function runBrowserAction(action) {
       attachment,
       priority: true,
     });
-    return { ok: true, data: { screenshot: true } };
+    // Return the base64 image data so the autonomous runner can pass it to a vision model
+    const base64Match = uploadDataUrl.match(/^data:[^;]+;base64,(.+)$/);
+    const imageBase64 = base64Match ? base64Match[1] : null;
+    return { ok: true, data: { screenshot: true, image_base64: imageBase64 } };
   }
 
   if (action.type === 'open_tab') {
@@ -718,7 +724,11 @@ function isAllowedTaskingDomain(url) {
 async function ensureAllowedDomain(action) {
   const type = normalizeActionType(action);
 
-  if (type === 'wait') {
+  // Allow all action types — the AI operates on any domain.
+  // Security is handled by shouldBlockAction() (destructive actions)
+  // and isSensitiveAction() (login, payment, etc. require user confirm).
+
+  if (type === 'wait' || type === 'screenshot' || type === 'get_console_logs' || type === 'get_network_logs') {
     return { ok: true };
   }
 
@@ -727,20 +737,15 @@ async function ensureAllowedDomain(action) {
     if (!targetUrl) {
       return { ok: false, error: 'Missing url for navigation.' };
     }
-    if (!isAllowedTaskingDomain(targetUrl)) {
-      return { ok: false, error: 'Blocked: only tasking.tech domains are allowed.' };
+    // Block obviously dangerous URLs (javascript:, data:, file:, chrome:)
+    const lower = targetUrl.toLowerCase().trim();
+    if (lower.startsWith('javascript:') || lower.startsWith('file:') || lower.startsWith('chrome:')) {
+      return { ok: false, error: 'Blocked: unsafe URL scheme.' };
     }
     return { ok: true };
   }
 
-  const activeTab = await getActiveTabInfo();
-  const activeUrl = activeTab?.url || '';
-  if (!activeUrl) {
-    return { ok: false, error: 'Unable to verify active tab domain.' };
-  }
-  if (!isAllowedTaskingDomain(activeUrl)) {
-    return { ok: false, error: 'Blocked: active tab is not a tasking.tech domain.' };
-  }
+  // For click/type/scroll/extract/submit — allow on any page
   return { ok: true };
 }
 

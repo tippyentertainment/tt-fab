@@ -3,6 +3,269 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
+// ── Autonomous Action Queue Polling ──────────────────────────────────
+// Polls tasking.tech for pending actions from autonomous tasks.
+// When the AI runs a task and needs browser automation, actions are
+// queued in the DB. This loop picks them up, executes them, and
+// posts results back.
+
+const QUEUE_POLL_INTERVAL_MS = 2000;
+const QUEUE_API_BASE = 'https://tasking.tech/_api/extension';
+let queuePollingActive = false;
+let queuePollTimer = null;
+
+async function pollActionQueue() {
+  if (queuePollingActive) return;
+  queuePollingActive = true;
+
+  try {
+    const sessionToken = await getTaskingSessionToken();
+    if (!sessionToken) {
+      // Not logged in — skip this poll
+      return;
+    }
+
+    const resp = await fetch(`${QUEUE_API_BASE}/queue`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (resp.status === 204) {
+      // No pending actions — nothing to do
+      return;
+    }
+
+    if (resp.status === 401) {
+      // Not authenticated — stop polling until next session
+      console.log('[Queue] Not authenticated, will retry next cycle');
+      return;
+    }
+
+    if (!resp.ok) {
+      console.warn('[Queue] Poll failed:', resp.status);
+      return;
+    }
+
+    const data = await resp.json();
+    if (!data || !data.id || !Array.isArray(data.actions)) {
+      return;
+    }
+
+    console.log(`[Queue] Received ${data.actions.length} action(s) for queue ${data.id}`);
+
+    // Execute actions via sidepanel (which has the action execution logic)
+    // Forward to sidepanel for execution, or execute directly via content script
+    const results = [];
+    for (const action of data.actions) {
+      const result = await executeQueuedAction(action);
+      results.push(result);
+    }
+
+    // Build result summary
+    const resultSummary = results.map((r) => {
+      const parts = [
+        `id=${r.id || 'n/a'}`,
+        `type=${r.type || 'unknown'}`,
+        `status=${r.status || 'unknown'}`,
+      ];
+      if (r.error) parts.push(`error="${r.error}"`);
+      if (r.data) {
+        // Include data but limit size (except for screenshot base64)
+        const dataStr = JSON.stringify(r.data);
+        if (dataStr.length > 5000 && !r.data.image_base64) {
+          parts.push(`data=${dataStr.substring(0, 5000)}...`);
+        } else {
+          parts.push(`data=${dataStr}`);
+        }
+      }
+      return parts.join(' ');
+    }).join('\n');
+
+    const finalResult = `[ACTION_RESULTS]\n${resultSummary}\n[/ACTION_RESULTS]`;
+    const finalStatus = results.every((r) => r.status === 'success') ? 'completed' : 'failed';
+
+    // POST result back
+    await fetch(`${QUEUE_API_BASE}/result`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: data.id,
+        result: finalResult,
+        status: finalStatus,
+      }),
+    });
+
+    console.log(`[Queue] Posted result for ${data.id}: ${finalStatus}`);
+  } catch (err) {
+    console.warn('[Queue] Poll error:', err);
+  } finally {
+    queuePollingActive = false;
+  }
+}
+
+async function executeQueuedAction(action) {
+  const type = normalizeQueueActionType(action);
+  const resultBase = { id: action.id || null, type: type || 'unknown' };
+
+  try {
+    if (type === 'wait') {
+      const ms = typeof action.ms === 'number' ? action.ms : 500;
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      return { ...resultBase, status: 'success', data: { waitedMs: ms } };
+    }
+
+    if (type === 'screenshot') {
+      const screenshot = await captureScreenshotAsync();
+      if (!screenshot) {
+        return { ...resultBase, status: 'failed', error: 'Screenshot capture failed' };
+      }
+      // Extract base64 from data URL for vision model passthrough
+      const base64Match = screenshot.match(/^data:[^;]+;base64,(.+)$/);
+      const imageBase64 = base64Match ? base64Match[1] : null;
+      return {
+        ...resultBase,
+        status: 'success',
+        data: { screenshot: true, image_base64: imageBase64 },
+      };
+    }
+
+    if (type === 'open_tab' || (type === 'navigate' && action.newTab)) {
+      if (!action.url) {
+        return { ...resultBase, status: 'failed', error: 'Missing url' };
+      }
+      await new Promise((resolve, reject) => {
+        chrome.tabs.create({ url: action.url, active: true }, (tab) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve(tab);
+        });
+      });
+      // Wait a moment for the page to start loading
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return { ...resultBase, status: 'success', data: { url: action.url } };
+    }
+
+    // All other actions (click, type, scroll, extract, submit, navigate, get_console_logs, get_network_logs)
+    // Forward to content script
+    const response = await sendToActiveTab({ action: 'performActions', actions: [action] });
+    if (!response || response.error) {
+      return {
+        ...resultBase,
+        status: 'failed',
+        error: response?.error || 'No response from content script',
+      };
+    }
+    const result = response.results && response.results[0] ? response.results[0] : null;
+    if (!result) {
+      return { ...resultBase, status: 'failed', error: 'No action result returned' };
+    }
+    if (!result.ok) {
+      return {
+        ...resultBase,
+        status: 'failed',
+        error: result.error || 'Action failed',
+        data: result.data || null,
+      };
+    }
+    return { ...resultBase, status: 'success', data: result.data || null };
+  } catch (err) {
+    return {
+      ...resultBase,
+      status: 'failed',
+      error: err && err.message ? err.message : 'Action execution error',
+    };
+  }
+}
+
+function normalizeQueueActionType(action) {
+  const raw = String(action?.type || action?.action || '').toLowerCase();
+  if (raw === 'tap' || raw === 'press') return 'click';
+  if (raw === 'input') return 'type';
+  if (raw === 'goto' || raw === 'open') return 'navigate';
+  if (raw === 'open_tab' || raw === 'open-tab' || raw === 'open_url' || raw === 'open_new_tab') return 'open_tab';
+  if (raw === 'console_logs' || raw === 'get_console_log' || raw === 'console') return 'get_console_logs';
+  if (raw === 'network_logs' || raw === 'get_network_log' || raw === 'network') return 'get_network_logs';
+  return raw;
+}
+
+function captureScreenshotAsync() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+      const windowId = tabs && tabs[0] ? tabs[0].windowId : chrome.windows.WINDOW_ID_CURRENT;
+      chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataUrl) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[Queue] Screenshot failed:', chrome.runtime.lastError.message);
+          resolve(null);
+          return;
+        }
+        resolve(dataUrl || null);
+      });
+    });
+  });
+}
+
+// Start polling when extension loads
+function startQueuePolling() {
+  if (queuePollTimer) return;
+  queuePollTimer = setInterval(pollActionQueue, QUEUE_POLL_INTERVAL_MS);
+  console.log('[Queue] Polling started');
+}
+
+function stopQueuePolling() {
+  if (queuePollTimer) {
+    clearInterval(queuePollTimer);
+    queuePollTimer = null;
+    console.log('[Queue] Polling stopped');
+  }
+}
+
+// Start polling immediately
+startQueuePolling();
+
+// Also send heartbeat to register the extension session
+async function sendHeartbeat() {
+  try {
+    const sessionToken = await getTaskingSessionToken();
+    if (!sessionToken) return;
+
+    const tabs = await new Promise((resolve) => {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, resolve);
+    });
+    const activeTab = tabs && tabs[0];
+
+    await fetch(`${QUEUE_API_BASE}/session`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        tabUrl: activeTab?.url || null,
+        tabTitle: activeTab?.title || null,
+      }),
+    });
+  } catch (err) {
+    // Non-critical
+  }
+}
+
+// Heartbeat every 15 seconds to keep session alive
+setInterval(sendHeartbeat, 15000);
+sendHeartbeat(); // Send immediately on load
+
+// ── Message Handlers ─────────────────────────────────────────────────
+
 // Handle messages from sidepanel
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'captureScreenshot') {
