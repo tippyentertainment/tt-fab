@@ -436,13 +436,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             body: JSON.stringify(enrichedPayload),
           });
           let data = null;
-          try {
-            data = await resp.json();
-          } catch (err) {
+          const respContentType = resp.headers.get('Content-Type') || '';
+          if (respContentType.includes('text/plain')) {
+            // Streaming text response from bridge — read as text, wrap as response
             const text = await resp.text().catch(() => '');
-            data = { error: text || 'Invalid response' };
+            data = { response: text || '' };
+          } else {
+            try {
+              data = await resp.json();
+            } catch (err) {
+              const text = await resp.text().catch(() => '');
+              data = resp.ok ? { response: text || '' } : { error: text || 'Invalid response' };
+            }
           }
-          console.log('background received response', url, data);
+          console.log('background received response', url, typeof data?.response === 'string' ? `${data.response.substring(0, 200)}...` : data);
           sendResponse({ result: data, status: resp.status, ok: resp.ok });
           return;
         } catch (err) {

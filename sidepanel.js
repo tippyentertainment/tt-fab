@@ -31,7 +31,7 @@ let inputContainer;
 let loginContainer;
 let loginFrame;
 
-const REQUEST_TIMEOUT_MS = 30000;
+const REQUEST_TIMEOUT_MS = 300000; // 5 minutes — extension action loops take time
 const TASKING_DOMAIN_HOSTS = ['tasking.tech'];
 const TASKING_DOMAIN_SUFFIXES = ['.tasking.tech'];
 
