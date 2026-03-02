@@ -62,10 +62,65 @@ async function pollActionQueue() {
     lastQueueActionTabId = null;
 
     const results = [];
+
+    // ── BEFORE: Auto-capture screenshot + form fields BEFORE actions ──
+    // Gives the AI context about the starting state of the page
+    try {
+      const beforeScreenshot = await captureScreenshotAsync();
+      if (beforeScreenshot) {
+        const b64 = beforeScreenshot.match(/^data:[^;]+;base64,(.+)$/);
+        results.push({
+          id: '_before_screenshot', type: 'screenshot', status: 'success',
+          data: { screenshot: true, phase: 'before', image_base64: b64 ? b64[1] : null },
+        });
+      }
+    } catch (e) { console.warn('[Queue] Before-screenshot failed:', e); }
+
+    try {
+      const beforeForm = await sendToActiveTab({ action: 'performActions', actions: [{ type: 'get_form_fields' }] });
+      if (beforeForm && beforeForm.results && beforeForm.results[0] && beforeForm.results[0].ok) {
+        results.push({
+          id: '_before_form_fields', type: 'get_form_fields', status: 'success',
+          data: { phase: 'before', ...beforeForm.results[0].data },
+        });
+      }
+    } catch (e) { /* Page might not have forms */ }
+
+    // ── EXECUTE: Run the queued actions ──
     for (const action of data.actions) {
       const result = await executeQueuedAction(action);
       results.push(result);
     }
+
+    // ── AFTER: Auto-capture screenshot + form fields AFTER actions ──
+    // Shows the AI what changed and what's available to interact with next
+    const hadScreenshot = results.some((r) =>
+      (r.type === 'screenshot' || r.type === 'screen_capture') && r.id !== '_before_screenshot'
+    );
+    if (!hadScreenshot) {
+      try {
+        const afterScreenshot = await captureScreenshotAsync();
+        if (afterScreenshot) {
+          const b64 = afterScreenshot.match(/^data:[^;]+;base64,(.+)$/);
+          results.push({
+            id: '_after_screenshot', type: 'screenshot', status: 'success',
+            data: { screenshot: true, phase: 'after', image_base64: b64 ? b64[1] : null },
+          });
+        }
+      } catch (e) { console.warn('[Queue] After-screenshot failed:', e); }
+    }
+
+    try {
+      const afterForm = lastQueueActionTabId
+        ? await sendToTab(lastQueueActionTabId, { action: 'performActions', actions: [{ type: 'get_form_fields' }] })
+        : await sendToActiveTab({ action: 'performActions', actions: [{ type: 'get_form_fields' }] });
+      if (afterForm && afterForm.results && afterForm.results[0] && afterForm.results[0].ok) {
+        results.push({
+          id: '_after_form_fields', type: 'get_form_fields', status: 'success',
+          data: { phase: 'after', ...afterForm.results[0].data },
+        });
+      }
+    } catch (e) { /* Non-critical */ }
 
     // Build result summary
     const resultSummary = results.map((r) => {
@@ -246,6 +301,10 @@ function normalizeQueueActionType(action) {
   if (raw === 'select' || raw === 'select_option' || raw === 'choose') return 'select';
   if (raw === 'get_form_fields' || raw === 'get_form' || raw === 'read_form' || raw === 'form_fields') return 'get_form_fields';
   if (raw === 'get_page_info' || raw === 'page_info' || raw === 'read_page') return 'get_page_info';
+  if (raw === 'set_value' || raw === 'set' || raw === 'set_range' || raw === 'set_date' || raw === 'set_number') return 'set_value';
+  if (raw === 'upload_file' || raw === 'upload' || raw === 'file_upload' || raw === 'attach') return 'upload_file';
+  if (raw === 'focus') return 'focus';
+  if (raw === 'clear') return 'clear';
   return raw;
 }
 
@@ -305,7 +364,8 @@ async function sendHeartbeat() {
         extension_id: chrome.runtime.id,
         capabilities: [
           'screenshot', 'screen_capture', 'navigate', 'open_tab',
-          'click', 'type', 'select', 'submit', 'scroll', 'extract',
+          'click', 'type', 'select', 'set_value', 'upload_file',
+          'submit', 'scroll', 'extract', 'focus', 'clear',
           'get_form_fields', 'get_page_info',
           'get_console_logs', 'get_network_logs', 'wait',
         ],

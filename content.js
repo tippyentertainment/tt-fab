@@ -134,8 +134,12 @@
       return 'get_network_logs';
     }
     if (raw === 'select' || raw === 'select_option' || raw === 'choose') return 'select';
+    if (raw === 'set_value' || raw === 'set' || raw === 'set_range' || raw === 'set_date' || raw === 'set_number') return 'set_value';
+    if (raw === 'upload_file' || raw === 'upload' || raw === 'file_upload' || raw === 'attach') return 'upload_file';
     if (raw === 'get_form_fields' || raw === 'get_form' || raw === 'read_form' || raw === 'form_fields') return 'get_form_fields';
     if (raw === 'get_page_info' || raw === 'page_info' || raw === 'read_page') return 'get_page_info';
+    if (raw === 'focus') return 'focus';
+    if (raw === 'clear') return 'clear';
     return raw;
   }
 
@@ -440,6 +444,111 @@
             bodyTextLength: (document.body?.innerText || '').length,
           },
         };
+      }
+
+      if (type === 'set_value') {
+        // Set value on range sliders, date/time pickers, number fields, color pickers
+        let target = null;
+        if (action.selector) {
+          target = action.waitFor ? await waitForSelector(action.selector, action.timeoutMs) : document.querySelector(action.selector);
+        } else {
+          target = findElement(action);
+        }
+        if (!target) return { ok: false, error: 'set_value target not found' };
+        const val = action.value ?? action.text ?? '';
+        const inputType = (target.type || '').toLowerCase();
+        // Handle native input types that need special setter (React/Vue controlled inputs)
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(target, val);
+        } else {
+          target.value = val;
+        }
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+        // For range inputs, also dispatch a pointerdown/pointerup to trigger visual updates
+        if (inputType === 'range') {
+          target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+          target.dispatchEvent(new Event('pointerup', { bubbles: true }));
+        }
+        return { ok: true, data: { value: target.value, type: inputType } };
+      }
+
+      if (type === 'upload_file') {
+        // Upload a file to a file input — accepts base64 data + filename + mimeType
+        let target = null;
+        if (action.selector) {
+          target = action.waitFor ? await waitForSelector(action.selector, action.timeoutMs) : document.querySelector(action.selector);
+        } else {
+          target = findElement(action);
+        }
+        if (!target) return { ok: false, error: 'upload_file target not found' };
+        if (target.tagName !== 'INPUT' || target.type !== 'file') {
+          return { ok: false, error: 'Target is not a file input' };
+        }
+        if (!action.base64 && !action.url) {
+          return { ok: false, error: 'upload_file requires base64 data or url' };
+        }
+        try {
+          let blob;
+          if (action.base64) {
+            const mimeType = action.mimeType || action.mime_type || 'application/octet-stream';
+            const byteChars = atob(action.base64);
+            const byteArr = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+            blob = new Blob([byteArr], { type: mimeType });
+          } else {
+            const resp = await fetch(action.url);
+            blob = await resp.blob();
+          }
+          const fileName = action.filename || action.file_name || 'file';
+          const file = new File([blob], fileName, { type: blob.type });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          target.files = dt.files;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+          target.dispatchEvent(new Event('input', { bubbles: true }));
+          return { ok: true, data: { filename: fileName, size: blob.size, type: blob.type } };
+        } catch (err) {
+          return { ok: false, error: `upload_file failed: ${err.message || err}` };
+        }
+      }
+
+      if (type === 'focus') {
+        let target = null;
+        if (action.selector) {
+          target = action.waitFor ? await waitForSelector(action.selector, action.timeoutMs) : document.querySelector(action.selector);
+        } else {
+          target = findElement(action);
+        }
+        if (!target) return { ok: false, error: 'Focus target not found' };
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.focus();
+        return { ok: true, data: { selector: action.selector || null } };
+      }
+
+      if (type === 'clear') {
+        let target = null;
+        if (action.selector) {
+          target = action.waitFor ? await waitForSelector(action.selector, action.timeoutMs) : document.querySelector(action.selector);
+        } else {
+          target = findElement(action);
+        }
+        if (!target) return { ok: false, error: 'Clear target not found' };
+        if (target.isContentEditable) {
+          target.textContent = '';
+        } else if ('value' in target) {
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+            || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+          if (nativeSetter) {
+            nativeSetter.call(target, '');
+          } else {
+            target.value = '';
+          }
+        }
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+        return { ok: true, data: { selector: action.selector || null } };
       }
 
       return { ok: false, error: `Unknown action type: ${type}` };
