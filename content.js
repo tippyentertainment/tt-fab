@@ -668,7 +668,11 @@
         const val = action.value ?? action.text ?? '';
         const inputType = (target.type || '').toLowerCase();
         // Handle native input types that need special setter (React/Vue controlled inputs)
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        // Must use the correct prototype based on element type — HTMLInputElement setter throws on textarea
+        const proto = target instanceof HTMLTextAreaElement
+          ? window.HTMLTextAreaElement.prototype
+          : window.HTMLInputElement.prototype;
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
         if (nativeInputValueSetter) {
           nativeInputValueSetter.call(target, val);
         } else {
@@ -748,8 +752,10 @@
         if (target.isContentEditable) {
           target.textContent = '';
         } else if ('value' in target) {
-          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
-            || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+          const proto = target instanceof HTMLTextAreaElement
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+          const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
           if (nativeSetter) {
             nativeSetter.call(target, '');
           } else {
