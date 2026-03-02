@@ -389,7 +389,7 @@
         if (!target) return { ok: false, error: 'Select target not found' };
         const val = action.value ?? action.text ?? '';
 
-        // <select> dropdown
+        // ── Native <select> dropdown ──────────────────────────────────
         if (target.tagName === 'SELECT') {
           const options = Array.from(target.options);
           // Try exact value match first
@@ -402,56 +402,122 @@
             const optTexts = options.map((o) => `"${o.textContent.trim()}" (value=${o.value})`).join(', ');
             return { ok: false, error: `No matching option for "${val}". Available: ${optTexts}` };
           }
-          target.value = match.value;
-          target.dispatchEvent(new Event('change', { bubbles: true }));
+          // Use native setter so React/Angular/Vue detect the change
+          const nativeSelectSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+          if (nativeSelectSetter) {
+            nativeSelectSetter.call(target, match.value);
+          } else {
+            target.value = match.value;
+          }
+          // Also set selectedIndex directly as a fallback for Angular ngModel
+          const matchIdx = options.indexOf(match);
+          if (matchIdx >= 0) target.selectedIndex = matchIdx;
+          // Fire full event sequence: focus → input → change (Angular listens on change, React on input)
+          target.focus();
           target.dispatchEvent(new Event('input', { bubbles: true }));
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+          // Also fire the native click-style events on the option for frameworks that listen there
+          try { match.selected = true; } catch(e) {}
           return { ok: true, data: { selected: match.textContent.trim(), value: match.value } };
         }
 
-        // Radio button
+        // ── Radio button ──────────────────────────────────────────────
         if (target.type === 'radio') {
           target.checked = true;
+          target.dispatchEvent(new Event('input', { bubbles: true }));
           target.dispatchEvent(new Event('change', { bubbles: true }));
           return { ok: true, data: { selected: target.value } };
         }
 
-        // Checkbox
+        // ── Checkbox ──────────────────────────────────────────────────
         if (target.type === 'checkbox') {
           const shouldCheck = val === true || val === 'true' || val === '1' || val === 'on';
           target.checked = shouldCheck;
+          target.dispatchEvent(new Event('input', { bubbles: true }));
           target.dispatchEvent(new Event('change', { bubbles: true }));
           return { ok: true, data: { checked: target.checked } };
         }
 
-        // Custom dropdown — click trigger to open, wait for options, then click match
+        // ── Custom dropdown — click to open, find option, click it ───
+        // Step 1: Click the trigger to open the dropdown
         simulateRealClick(target);
-        await new Promise(r => setTimeout(r, 400)); // Wait for dropdown animation
+        await new Promise(r => setTimeout(r, 500)); // Wait for dropdown animation
 
-        // Search for the option in expanded dropdown/menu
+        // Step 2: Search everywhere for the option (portals may append to body)
         const customSelectors = [
           '[role="option"]', '[role="menuitem"]', '[role="listitem"]',
           'li[data-value]', '.option', '.dropdown-item', '.select-option',
-          '[class*="option"]', '[class*="menu-item"]', '[class*="listbox"]',
-          '[class*="dropdown-option"]', 'li', 'div[data-value]', 'span[data-value]',
+          '[class*="option"]:not(select)', '[class*="menu-item"]', '[class*="listbox"]',
+          '[class*="dropdown-option"]', '[class*="select__option"]', '[class*="Select-option"]',
+          'li', 'div[data-value]', 'span[data-value]',
+          // Material UI / Ant Design / Headless UI portals
+          '.MuiMenuItem-root', '.ant-select-item', '[class*="menu"] > div',
         ];
-        const optionEl = findByText(String(val), customSelectors);
-        if (optionEl) {
-          simulateRealClick(optionEl);
-          return { ok: true, data: { clickedOption: String(val), method: 'custom_dropdown' } };
+
+        // Helper: check if an element is visible and part of an open dropdown
+        const isVisibleOption = (el) => {
+          if (!el || el.offsetParent === null) return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const valStr = String(val);
+        const valLower = valStr.toLowerCase().trim();
+
+        // Pass 1: exact text match among visible option-like elements
+        for (const sel of customSelectors) {
+          try {
+            const nodes = document.querySelectorAll(sel);
+            for (const node of nodes) {
+              if (!isVisibleOption(node)) continue;
+              const text = (node.innerText || node.textContent || '').trim();
+              if (text.toLowerCase() === valLower) {
+                simulateRealClick(node);
+                return { ok: true, data: { clickedOption: text, method: 'custom_dropdown_exact' } };
+              }
+            }
+          } catch(e) {}
         }
 
-        // Second attempt — scan ALL matching elements for partial text match
-        const allOptions = document.querySelectorAll(customSelectors.join(','));
-        const needle = String(val).toLowerCase();
-        for (const opt of allOptions) {
-          const optText = (opt.innerText || opt.textContent || opt.getAttribute('data-value') || '').trim().toLowerCase();
-          if (optText && (optText.includes(needle) || needle.includes(optText))) {
-            simulateRealClick(opt);
-            return { ok: true, data: { clickedOption: optText, method: 'custom_dropdown_scan' } };
+        // Pass 2: partial/contains match among visible elements
+        for (const sel of customSelectors) {
+          try {
+            const nodes = document.querySelectorAll(sel);
+            for (const node of nodes) {
+              if (!isVisibleOption(node)) continue;
+              const text = (node.innerText || node.textContent || node.getAttribute('data-value') || '').trim().toLowerCase();
+              if (text && (text.includes(valLower) || valLower.includes(text))) {
+                simulateRealClick(node);
+                return { ok: true, data: { clickedOption: text, method: 'custom_dropdown_partial' } };
+              }
+            }
+          } catch(e) {}
+        }
+
+        // Pass 3: data-value attribute match
+        const dataValNodes = document.querySelectorAll(`[data-value="${CSS.escape(valStr)}"], [data-value="${CSS.escape(valLower)}"]`);
+        for (const node of dataValNodes) {
+          if (isVisibleOption(node)) {
+            simulateRealClick(node);
+            return { ok: true, data: { clickedOption: valStr, method: 'custom_dropdown_data_attr' } };
           }
         }
 
-        return { ok: false, error: `Could not select "${val}" — not a <select>/radio/checkbox and no matching option in custom dropdown` };
+        // Pass 4: if nothing found, maybe the dropdown needs more time — wait and retry once
+        await new Promise(r => setTimeout(r, 500));
+        const retryNodes = document.querySelectorAll(customSelectors.join(','));
+        for (const node of retryNodes) {
+          if (!isVisibleOption(node)) continue;
+          const text = (node.innerText || node.textContent || '').trim().toLowerCase();
+          if (text && (text === valLower || text.includes(valLower) || valLower.includes(text))) {
+            simulateRealClick(node);
+            return { ok: true, data: { clickedOption: text, method: 'custom_dropdown_retry' } };
+          }
+        }
+
+        // Nothing worked — close the dropdown by clicking the trigger again and report failure
+        simulateRealClick(target);
+        return { ok: false, error: `Could not select "${val}" — tried native <select>, radio, checkbox, and custom dropdown. No visible matching option found.` };
       }
 
       if (type === 'get_form_fields') {

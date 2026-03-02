@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TaskingBot",
-  "version": "1.9",
+  "version": "2.0",
   "description": "AI assistant floating action button",
   "permissions": ["activeTab", "sidePanel", "tabs", "storage", "cookies"],
   "host_permissions": ["https://tasking.tech/*", "<all_urls>"],
