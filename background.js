@@ -163,11 +163,13 @@ async function executeQueuedAction(action) {
       };
     }
 
-    if (type === 'open_tab' || (type === 'navigate' && action.newTab)) {
+    if (type === 'open_tab' || type === 'navigate') {
       if (!action.url) {
         return { ...resultBase, status: 'failed', error: 'Missing url' };
       }
-      await new Promise((resolve, reject) => {
+      // Always open in a new tab to avoid navigating the tasking.tech tab away
+      // (which would kill the content script and break subsequent actions)
+      const newTab = await new Promise((resolve, reject) => {
         chrome.tabs.create({ url: action.url, active: true }, (tab) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
@@ -176,13 +178,25 @@ async function executeQueuedAction(action) {
           resolve(tab);
         });
       });
-      // Wait a moment for the page to start loading
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      return { ...resultBase, status: 'success', data: { url: action.url } };
+      // Wait for page to finish loading (up to 15s)
+      await new Promise((resolve) => {
+        const onUpdate = (tabId, info) => {
+          if (tabId === newTab.id && info.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(onUpdate);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(onUpdate);
+        setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(onUpdate);
+          resolve();
+        }, 15000);
+      });
+      return { ...resultBase, status: 'success', data: { url: action.url, tabId: newTab.id } };
     }
 
-    // All other actions (click, type, scroll, extract, submit, navigate, get_console_logs, get_network_logs)
-    // Forward to content script
+    // All other actions (click, type, scroll, extract, submit, get_console_logs, get_network_logs)
+    // Forward to content script on the active tab
     const response = await sendToActiveTab({ action: 'performActions', actions: [action] });
     if (!response || response.error) {
       return {
