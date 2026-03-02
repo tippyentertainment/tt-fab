@@ -179,6 +179,44 @@
     simulateMouseEvent(element, 'mousemove', coords);
   }
 
+  // Generate a unique CSS selector for any element, even without id/name
+  function generateSelector(el) {
+    if (!el || el === document.body || el === document.documentElement) return null;
+    // Best: id
+    if (el.id) return `#${CSS.escape(el.id)}`;
+    // Good: name attribute
+    if (el.name) return `${el.tagName.toLowerCase()}[name="${CSS.escape(el.name)}"]`;
+    // Build a path from the nearest ancestor with an id, or from body
+    const parts = [];
+    let current = el;
+    while (current && current !== document.body && current !== document.documentElement && parts.length < 5) {
+      let seg = current.tagName.toLowerCase();
+      if (current.id) {
+        parts.unshift(`#${CSS.escape(current.id)}`);
+        break;
+      }
+      // Use nth-of-type for uniqueness among siblings
+      const parent = current.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(c => c.tagName === current.tagName);
+        if (siblings.length > 1) {
+          const idx = siblings.indexOf(current) + 1;
+          seg += `:nth-of-type(${idx})`;
+        }
+      }
+      parts.unshift(seg);
+      current = current.parentElement;
+    }
+    const selector = parts.join(' > ');
+    // Validate: does this selector uniquely find the element?
+    try {
+      const found = document.querySelector(selector);
+      if (found === el) return selector;
+    } catch { /* invalid selector */ }
+    // Fallback: use full path from body
+    return null;
+  }
+
   async function waitForSelector(selector, timeoutMs) {
     const timeout = typeof timeoutMs === 'number' ? timeoutMs : 0;
     const start = Date.now();
@@ -419,22 +457,31 @@
       if (type === 'get_form_fields') {
         // Return all interactive form elements on the page with their current state
         const fields = [];
-        const inputs = document.querySelectorAll('input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"]');
+        // Scan native form elements + ARIA-role elements + common custom dropdown triggers
+        const inputs = document.querySelectorAll(
+          'input, textarea, select, [contenteditable="true"], ' +
+          '[role="combobox"], [role="listbox"], [role="spinbutton"], ' +
+          '[aria-haspopup="listbox"], [aria-haspopup="true"], [aria-haspopup="menu"]'
+        );
         for (const el of inputs) {
+          // Skip hidden/invisible elements
+          if (el.offsetParent === null && el.type !== 'hidden') continue;
           const field = {
             tag: el.tagName.toLowerCase(),
             type: el.type || null,
             name: el.name || null,
             id: el.id || null,
-            selector: el.id ? `#${el.id}` : el.name ? `[name="${el.name}"]` : null,
+            // ALWAYS generate a usable selector — even without id/name
+            selector: generateSelector(el),
             placeholder: el.placeholder || null,
             label: null,
             value: el.value || null,
+            disabled: el.disabled || false,
             checked: el.type === 'checkbox' || el.type === 'radio' ? el.checked : undefined,
           };
-          // Find associated label
+          // Find associated label — try multiple strategies
           if (el.id) {
-            const label = document.querySelector(`label[for="${el.id}"]`);
+            const label = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
             if (label) field.label = label.textContent.trim();
           }
           if (!field.label && el.closest('label')) {
@@ -444,20 +491,42 @@
             const aria = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
             if (aria) field.label = aria;
           }
-          // For select elements, include available options
+          // Check preceding sibling or parent for label-like text
+          if (!field.label) {
+            const prev = el.previousElementSibling;
+            if (prev && prev.textContent && prev.textContent.trim().length < 80) {
+              field.label = prev.textContent.trim();
+            }
+          }
+          if (!field.label) {
+            const parent = el.parentElement;
+            if (parent) {
+              const labelEl = parent.querySelector('.field-title, .label, .form-label, label, legend, [class*="label"]');
+              if (labelEl && labelEl.textContent.trim().length < 80) {
+                field.label = labelEl.textContent.trim();
+              }
+            }
+          }
+          // For select elements, include ALL available options with their values
           if (el.tagName === 'SELECT') {
-            field.options = Array.from(el.options).map((o) => ({ value: o.value, text: o.textContent.trim(), selected: o.selected }));
+            field.options = Array.from(el.options).map((o) => ({
+              value: o.value,
+              text: o.textContent.trim(),
+              selected: o.selected,
+              disabled: o.disabled,
+            }));
           }
           fields.push(field);
         }
-        // Also get buttons for context
+        // Also get buttons for context — with generated selectors
         const buttons = [];
-        document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').forEach((btn) => {
+        document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], a.btn, a[class*="button"]').forEach((btn) => {
+          if (btn.offsetParent === null) return; // Skip hidden
           buttons.push({
             tag: btn.tagName.toLowerCase(),
             type: btn.type || null,
             text: (btn.innerText || btn.value || '').trim().substring(0, 100),
-            selector: btn.id ? `#${btn.id}` : null,
+            selector: generateSelector(btn),
           });
         });
         return { ok: true, data: { fields, buttons, url: window.location.href, title: document.title } };
