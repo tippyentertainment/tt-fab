@@ -20,105 +20,16 @@
     }
     window.__taskingbotInjected = true;
 
-    // Use a blob URL to bypass CSP inline-script restrictions
-    const script = document.createElement('script');
-    const code = `
-(function () {
-  if (window.__taskingbotMonitorInjected) return;
-  window.__taskingbotMonitorInjected = true;
-  function post(type, payload) {
+    // Load monitor.js from the extension's own URL — CSP always allows chrome-extension:// scripts
     try {
-      window.postMessage({ source: 'taskingbot-monitor', type: type, payload: payload }, '*');
-    } catch (e) {}
-  }
-  var methods = ['log', 'info', 'warn', 'error', 'debug'];
-  var original = {};
-  methods.forEach(function (method) {
-    original[method] = console[method];
-    console[method] = function () {
-      try {
-        post('console', { level: method, args: Array.prototype.slice.call(arguments), ts: Date.now() });
-      } catch (e) {}
-      return original[method].apply(console, arguments);
-    };
-  });
-  window.addEventListener('error', function (event) {
-    post('console', { level: 'error', args: [event.message || 'Script error'], ts: Date.now(), source: 'error' });
-  });
-  window.addEventListener('unhandledrejection', function (event) {
-    post('console', { level: 'error', args: [String(event.reason || 'Unhandled rejection')], ts: Date.now(), source: 'unhandledrejection' });
-  });
-  var originalFetch = window.fetch;
-  if (typeof originalFetch === 'function') {
-    window.fetch = function () {
-      var start = Date.now();
-      var input = arguments[0];
-      var init = arguments[1] || {};
-      var url = '';
-      try { url = typeof input === 'string' ? input : (input && input.url) || ''; } catch (e) {}
-      var method = (init && init.method) || (input && input.method) || 'GET';
-      return originalFetch.apply(this, arguments)
-        .then(function (res) {
-          post('network', {
-            type: 'fetch',
-            url: url,
-            method: method,
-            status: res.status,
-            ok: res.ok,
-            duration: Date.now() - start,
-            ts: Date.now()
-          });
-          return res;
-        })
-        .catch(function (err) {
-          post('network', {
-            type: 'fetch',
-            url: url,
-            method: method,
-            status: 0,
-            ok: false,
-            error: String(err || 'fetch error'),
-            duration: Date.now() - start,
-            ts: Date.now()
-          });
-          throw err;
-        });
-    };
-  }
-  var open = XMLHttpRequest.prototype.open;
-  var send = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (method, url) {
-    this.__taskingbotMeta = { method: method || 'GET', url: url || '', start: 0 };
-    return open.apply(this, arguments);
-  };
-  XMLHttpRequest.prototype.send = function () {
-    var meta = this.__taskingbotMeta || { method: 'GET', url: '', start: 0 };
-    meta.start = Date.now();
-    this.__taskingbotMeta = meta;
-    this.addEventListener('loadend', function () {
-      post('network', {
-        type: 'xhr',
-        url: meta.url,
-        method: meta.method,
-        status: this.status,
-        ok: this.status >= 200 && this.status < 400,
-        duration: Date.now() - meta.start,
-        ts: Date.now()
-      });
-    });
-    return send.apply(this, arguments);
-  };
-})();`;
-    try {
-      const blob = new Blob([code], { type: 'application/javascript' });
-      const url = URL.createObjectURL(blob);
-      script.src = url;
-      script.onload = () => { URL.revokeObjectURL(url); script.remove(); };
-      script.onerror = () => { URL.revokeObjectURL(url); script.remove(); };
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('monitor.js');
+      script.onload = () => script.remove();
+      script.onerror = () => script.remove();
       (document.documentElement || document.head || document.body).appendChild(script);
     } catch (e) {
-      // CSP may still block blob: URLs on some pages — non-critical
-      console.warn('[TaskingBot] Monitor script blocked by CSP, console/network logging unavailable');
+      // Non-critical — console/network logging won't work but actions still function
+      console.warn('[TaskingBot] Monitor injection failed:', e);
     }
   }
 

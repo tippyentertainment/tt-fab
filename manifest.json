@@ -26,6 +26,12 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://tasking.tech https://*.tasking.tech; img-src 'self' data: https://tasking.tech https://*.tasking.tech; connect-src https://tasking.tech https://*.tasking.tech; style-src 'self' 'unsafe-inline'"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["monitor.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
