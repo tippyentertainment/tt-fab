@@ -144,8 +144,9 @@
     }
   }
 
-  function simulateRealClick(element) {
+  async function simulateRealClick(element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await new Promise(r => setTimeout(r, 100)); // Let scroll settle
     const rect = element.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
@@ -160,9 +161,13 @@
     simulateMouseEvent(element, 'pointerdown', coords);
     simulateMouseEvent(element, 'mousedown', coords);
     element.focus();
+    await new Promise(r => setTimeout(r, 80)); // Realistic click timing
     simulateMouseEvent(element, 'pointerup', coords);
     simulateMouseEvent(element, 'mouseup', coords);
     simulateMouseEvent(element, 'click', coords);
+    // Fallback: element.click() produces isTrusted:true events that React respects
+    await new Promise(r => setTimeout(r, 50));
+    element.click();
   }
 
   function simulateHover(element) {
@@ -330,7 +335,7 @@
           target = findElement(action);
         }
         if (!target) return { ok: false, error: `Click target not found: selector="${action.selector || ''}" text="${action.text || ''}" x=${action.x ?? 'none'} y=${action.y ?? 'none'}` };
-        simulateRealClick(target);
+        await simulateRealClick(target);
         return { ok: true, data: {
           selector: action.selector || null,
           tag: target.tagName.toLowerCase(),
@@ -473,7 +478,7 @@
 
         // ── Custom dropdown — click to open, find option, click it ───
         // Step 1: Click the trigger to open the dropdown
-        simulateRealClick(target);
+        await simulateRealClick(target);
         await new Promise(r => setTimeout(r, 500)); // Wait for dropdown animation
 
         // Step 2: Search everywhere for the option (portals may append to body)
@@ -505,7 +510,7 @@
               if (!isVisibleOption(node)) continue;
               const text = (node.innerText || node.textContent || '').trim();
               if (text.toLowerCase() === valLower) {
-                simulateRealClick(node);
+                await simulateRealClick(node);
                 return { ok: true, data: { clickedOption: text, method: 'custom_dropdown_exact' } };
               }
             }
@@ -520,7 +525,7 @@
               if (!isVisibleOption(node)) continue;
               const text = (node.innerText || node.textContent || node.getAttribute('data-value') || '').trim().toLowerCase();
               if (text && (text.includes(valLower) || valLower.includes(text))) {
-                simulateRealClick(node);
+                await simulateRealClick(node);
                 return { ok: true, data: { clickedOption: text, method: 'custom_dropdown_partial' } };
               }
             }
@@ -531,7 +536,7 @@
         const dataValNodes = document.querySelectorAll(`[data-value="${CSS.escape(valStr)}"], [data-value="${CSS.escape(valLower)}"]`);
         for (const node of dataValNodes) {
           if (isVisibleOption(node)) {
-            simulateRealClick(node);
+            await simulateRealClick(node);
             return { ok: true, data: { clickedOption: valStr, method: 'custom_dropdown_data_attr' } };
           }
         }
@@ -543,13 +548,13 @@
           if (!isVisibleOption(node)) continue;
           const text = (node.innerText || node.textContent || '').trim().toLowerCase();
           if (text && (text === valLower || text.includes(valLower) || valLower.includes(text))) {
-            simulateRealClick(node);
+            await simulateRealClick(node);
             return { ok: true, data: { clickedOption: text, method: 'custom_dropdown_retry' } };
           }
         }
 
         // Nothing worked — close the dropdown by clicking the trigger again and report failure
-        simulateRealClick(target);
+        await simulateRealClick(target);
         return { ok: false, error: `Could not select "${val}" — tried native <select>, radio, checkbox, and custom dropdown. No visible matching option found.` };
       }
 
