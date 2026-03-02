@@ -27,11 +27,6 @@
   transform: scale(1.05);
 }
 
-#fab-button img {
-  width: 32px;
-  height: 32px;
-}
-
 .chat-panel {
   position: fixed;
   bottom: 96px;

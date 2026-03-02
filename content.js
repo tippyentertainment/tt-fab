@@ -320,9 +320,7 @@
     const fab = document.createElement('div');
     fab.id = 'taskingbot-fab';
     fab.innerHTML = `
-      <button id="fab-button">
-        <img src="${chrome.runtime.getURL('icons/icon48.png')}" alt="TaskingBot">
-      </button>
+      <button id="fab-button" aria-label="TaskingBot"></button>
     `;
     document.body.appendChild(fab);
 
