@@ -133,6 +133,9 @@
     if (raw === 'network_logs' || raw === 'get_network_log' || raw === 'get_network' || raw === 'network') {
       return 'get_network_logs';
     }
+    if (raw === 'select' || raw === 'select_option' || raw === 'choose') return 'select';
+    if (raw === 'get_form_fields' || raw === 'get_form' || raw === 'read_form' || raw === 'form_fields') return 'get_form_fields';
+    if (raw === 'get_page_info' || raw === 'page_info' || raw === 'read_page') return 'get_page_info';
     return raw;
   }
 
@@ -140,13 +143,32 @@
     if (!text) return null;
     const needle = String(text).trim().toLowerCase();
     if (!needle) return null;
-    const selectors = selectorList || ['button', 'a', 'input', 'textarea', '[role="button"]'];
+    const selectors = selectorList || [
+      'button', 'a', 'input', 'textarea', 'select', 'label',
+      '[role="button"]', '[role="option"]', '[role="menuitem"]',
+      '[role="tab"]', '[role="listbox"]', 'li', 'span', 'div',
+    ];
+    // First pass: exact match
     for (const selector of selectors) {
       const nodes = Array.from(document.querySelectorAll(selector));
       for (const node of nodes) {
-        const content = (node.innerText || node.value || '').trim().toLowerCase();
+        const content = (node.innerText || node.value || node.getAttribute('aria-label') || '').trim().toLowerCase();
         if (content && content === needle) return node;
       }
+    }
+    // Second pass: partial/contains match
+    for (const selector of selectors) {
+      const nodes = Array.from(document.querySelectorAll(selector));
+      for (const node of nodes) {
+        const content = (node.innerText || node.value || node.getAttribute('aria-label') || '').trim().toLowerCase();
+        if (content && content.includes(needle)) return node;
+      }
+    }
+    // Third pass: match by placeholder, title, or aria-label attributes
+    const allInputs = document.querySelectorAll('input, textarea, select, [contenteditable]');
+    for (const el of allInputs) {
+      const ph = (el.placeholder || el.title || el.getAttribute('aria-label') || '').toLowerCase();
+      if (ph && ph.includes(needle)) return el;
     }
     return null;
   }
@@ -291,6 +313,133 @@
         }
         target.click();
         return { ok: true, data: { selector: action.selector || null } };
+      }
+
+      if (type === 'select') {
+        // Select a dropdown/radio/checkbox option by value or text
+        let target = null;
+        if (action.selector) {
+          target = action.waitFor ? await waitForSelector(action.selector, action.timeoutMs) : document.querySelector(action.selector);
+        } else {
+          target = findElement(action);
+        }
+        if (!target) return { ok: false, error: 'Select target not found' };
+        const val = action.value ?? action.text ?? '';
+
+        // <select> dropdown
+        if (target.tagName === 'SELECT') {
+          const options = Array.from(target.options);
+          // Try exact value match first
+          let match = options.find((o) => o.value === val);
+          // Then exact text match
+          if (!match) match = options.find((o) => o.textContent.trim().toLowerCase() === String(val).toLowerCase());
+          // Then partial text match
+          if (!match) match = options.find((o) => o.textContent.trim().toLowerCase().includes(String(val).toLowerCase()));
+          if (!match) {
+            const optTexts = options.map((o) => `"${o.textContent.trim()}" (value=${o.value})`).join(', ');
+            return { ok: false, error: `No matching option for "${val}". Available: ${optTexts}` };
+          }
+          target.value = match.value;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+          target.dispatchEvent(new Event('input', { bubbles: true }));
+          return { ok: true, data: { selected: match.textContent.trim(), value: match.value } };
+        }
+
+        // Radio button
+        if (target.type === 'radio') {
+          target.checked = true;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+          return { ok: true, data: { selected: target.value } };
+        }
+
+        // Checkbox
+        if (target.type === 'checkbox') {
+          const shouldCheck = val === true || val === 'true' || val === '1' || val === 'on';
+          target.checked = shouldCheck;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+          return { ok: true, data: { checked: target.checked } };
+        }
+
+        // Custom dropdown — try clicking the matching option text inside the container
+        const optionEl = findByText(String(val), ['[role="option"]', '[role="menuitem"]', 'li', 'div', 'span']);
+        if (optionEl) {
+          optionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          optionEl.click();
+          return { ok: true, data: { clickedOption: String(val) } };
+        }
+        return { ok: false, error: `Could not select "${val}" — element is not a select/radio/checkbox and no matching option found` };
+      }
+
+      if (type === 'get_form_fields') {
+        // Return all interactive form elements on the page with their current state
+        const fields = [];
+        const inputs = document.querySelectorAll('input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"]');
+        for (const el of inputs) {
+          const field = {
+            tag: el.tagName.toLowerCase(),
+            type: el.type || null,
+            name: el.name || null,
+            id: el.id || null,
+            selector: el.id ? `#${el.id}` : el.name ? `[name="${el.name}"]` : null,
+            placeholder: el.placeholder || null,
+            label: null,
+            value: el.value || null,
+            checked: el.type === 'checkbox' || el.type === 'radio' ? el.checked : undefined,
+          };
+          // Find associated label
+          if (el.id) {
+            const label = document.querySelector(`label[for="${el.id}"]`);
+            if (label) field.label = label.textContent.trim();
+          }
+          if (!field.label && el.closest('label')) {
+            field.label = el.closest('label').textContent.trim();
+          }
+          if (!field.label) {
+            const aria = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
+            if (aria) field.label = aria;
+          }
+          // For select elements, include available options
+          if (el.tagName === 'SELECT') {
+            field.options = Array.from(el.options).map((o) => ({ value: o.value, text: o.textContent.trim(), selected: o.selected }));
+          }
+          fields.push(field);
+        }
+        // Also get buttons for context
+        const buttons = [];
+        document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').forEach((btn) => {
+          buttons.push({
+            tag: btn.tagName.toLowerCase(),
+            type: btn.type || null,
+            text: (btn.innerText || btn.value || '').trim().substring(0, 100),
+            selector: btn.id ? `#${btn.id}` : null,
+          });
+        });
+        return { ok: true, data: { fields, buttons, url: window.location.href, title: document.title } };
+      }
+
+      if (type === 'get_page_info') {
+        // Return a structured summary of the page for AI decision-making
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3')).map((h) => ({
+          level: h.tagName, text: h.textContent.trim().substring(0, 200),
+        }));
+        const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 30).map((a) => ({
+          text: (a.textContent || '').trim().substring(0, 100),
+          href: a.href,
+        }));
+        const images = Array.from(document.querySelectorAll('img[alt]')).slice(0, 20).map((img) => ({
+          alt: img.alt, src: img.src?.substring(0, 200),
+        }));
+        return {
+          ok: true,
+          data: {
+            url: window.location.href,
+            title: document.title,
+            headings,
+            links: links.length,
+            images: images.length,
+            bodyTextLength: (document.body?.innerText || '').length,
+          },
+        };
       }
 
       return { ok: false, error: `Unknown action type: ${type}` };

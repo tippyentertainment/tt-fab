@@ -243,6 +243,9 @@ function normalizeQueueActionType(action) {
   if (raw === 'console_logs' || raw === 'get_console_log' || raw === 'console') return 'get_console_logs';
   if (raw === 'network_logs' || raw === 'get_network_log' || raw === 'network') return 'get_network_logs';
   if (raw === 'screen_capture' || raw === 'screen-capture' || raw === 'screencapture' || raw === 'capture_screen' || raw === 'full_screenshot' || raw === 'desktop_screenshot') return 'screen_capture';
+  if (raw === 'select' || raw === 'select_option' || raw === 'choose') return 'select';
+  if (raw === 'get_form_fields' || raw === 'get_form' || raw === 'read_form' || raw === 'form_fields') return 'get_form_fields';
+  if (raw === 'get_page_info' || raw === 'page_info' || raw === 'read_page') return 'get_page_info';
   return raw;
 }
 
@@ -302,7 +305,8 @@ async function sendHeartbeat() {
         extension_id: chrome.runtime.id,
         capabilities: [
           'screenshot', 'screen_capture', 'navigate', 'open_tab',
-          'click', 'type', 'submit', 'scroll', 'extract',
+          'click', 'type', 'select', 'submit', 'scroll', 'extract',
+          'get_form_fields', 'get_page_info',
           'get_console_logs', 'get_network_logs', 'wait',
         ],
         tab_url: activeTab?.url || null,
