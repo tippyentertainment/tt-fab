@@ -335,12 +335,45 @@
           target = findElement(action);
         }
         if (!target) return { ok: false, error: `Click target not found: selector="${action.selector || ''}" text="${action.text || ''}" x=${action.x ?? 'none'} y=${action.y ?? 'none'}` };
-        await simulateRealClick(target);
+
+        // Walk UP to nearest interactive ancestor — findByText may match a <span> inside a
+        // React/custom button. The click handler lives on the button/div wrapper, not the text node.
+        const interactiveTags = new Set(['button', 'a', 'input', 'select', 'textarea']);
+        let clickTarget = target;
+        if (!interactiveTags.has(target.tagName.toLowerCase()) && !target.getAttribute('role')?.includes('button') && !target.onclick) {
+          let parent = target.parentElement;
+          for (let i = 0; i < 5 && parent; i++) {
+            const tag = parent.tagName.toLowerCase();
+            if (interactiveTags.has(tag) || parent.getAttribute('role') === 'button' || parent.onclick
+                || parent.getAttribute('tabindex') !== null || parent.classList.toString().match(/btn|button|click|submit|next|continue/i)) {
+              clickTarget = parent;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+        }
+
+        // Remove disabled state if present — form validation may have wrongly disabled it
+        const wasDisabled = clickTarget.disabled || clickTarget.getAttribute('aria-disabled') === 'true';
+        if (wasDisabled) {
+          clickTarget.disabled = false;
+          clickTarget.removeAttribute('aria-disabled');
+          clickTarget.style.pointerEvents = 'auto';
+        }
+
+        await simulateRealClick(clickTarget);
+        // If we walked up, also click the original target for frameworks that delegate differently
+        if (clickTarget !== target) {
+          await new Promise(r => setTimeout(r, 50));
+          target.click();
+        }
         return { ok: true, data: {
           selector: action.selector || null,
-          tag: target.tagName.toLowerCase(),
-          text: (target.innerText || target.value || '').substring(0, 80),
-          id: target.id || null,
+          tag: clickTarget.tagName.toLowerCase(),
+          text: (clickTarget.innerText || clickTarget.value || '').substring(0, 80),
+          id: clickTarget.id || null,
+          walkedUp: clickTarget !== target,
+          wasDisabled,
         }};
       }
 
@@ -378,9 +411,11 @@
           target.textContent = text;
         } else {
           target.focus();
-          // Use native value setter for React/Vue controlled input compatibility
-          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
-            || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+          // Use correct prototype based on element type — HTMLInputElement setter throws on textarea
+          const proto = target instanceof HTMLTextAreaElement
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+          const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
           if (action.clear !== false && 'value' in target) {
             if (nativeSetter) { nativeSetter.call(target, ''); }
             else { target.value = ''; }
@@ -390,8 +425,14 @@
             else { target.value = text; }
           }
         }
+        // Full event sequence: input → change → blur/focusout
+        // blur/focusout triggers form validation that many Next.js/React apps rely on
         target.dispatchEvent(new Event('input', { bubbles: true }));
         target.dispatchEvent(new Event('change', { bubbles: true }));
+        target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
+        target.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+        target.dispatchEvent(new FocusEvent('blur', { bubbles: false }));
+        target.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
         return { ok: true, data: { selector: action.selector || null, textLength: String(text).length } };
       }
 
