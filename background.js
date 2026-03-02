@@ -58,13 +58,41 @@ async function pollActionQueue() {
 
     console.log(`[Queue] Received ${data.actions.length} action(s) for queue ${data.id}`);
 
-    // Reset tab tracking for this batch
-    lastQueueActionTabId = null;
+    // DO NOT reset lastQueueActionTabId — it persists across batches so follow-up
+    // actions (select, type, click) target the tab opened by a previous navigate.
+    // Only a new navigate/open_tab action updates it.
+
+    // Validate tracked tab still exists
+    if (lastQueueActionTabId) {
+      try {
+        await new Promise((resolve, reject) => {
+          chrome.tabs.get(lastQueueActionTabId, (tab) => {
+            if (chrome.runtime.lastError || !tab) {
+              console.log(`[Queue] Tracked tab ${lastQueueActionTabId} no longer exists, clearing`);
+              lastQueueActionTabId = null;
+              reject();
+            } else {
+              resolve(tab);
+            }
+          });
+        });
+      } catch { /* tab gone, cleared above */ }
+    }
 
     const results = [];
 
     // ── BEFORE: Auto-capture screenshot + form fields BEFORE actions ──
-    // Gives the AI context about the starting state of the page
+    // Target the bot's tab (lastQueueActionTabId) if available, not whatever tab the user has open
+    if (lastQueueActionTabId) {
+      // Bring bot's tab to foreground for screenshot
+      try {
+        await new Promise((resolve) => {
+          chrome.tabs.update(lastQueueActionTabId, { active: true }, () => resolve());
+        });
+        await new Promise(r => setTimeout(r, 200)); // Brief settle
+      } catch { /* non-critical */ }
+    }
+
     try {
       const beforeScreenshot = await captureScreenshotAsync();
       if (beforeScreenshot) {
@@ -77,7 +105,9 @@ async function pollActionQueue() {
     } catch (e) { console.warn('[Queue] Before-screenshot failed:', e); }
 
     try {
-      const beforeForm = await sendToActiveTab({ action: 'performActions', actions: [{ type: 'get_form_fields' }] });
+      const beforeForm = lastQueueActionTabId
+        ? await sendToTab(lastQueueActionTabId, { action: 'performActions', actions: [{ type: 'get_form_fields' }] })
+        : await sendToActiveTab({ action: 'performActions', actions: [{ type: 'get_form_fields' }] });
       if (beforeForm && beforeForm.results && beforeForm.results[0] && beforeForm.results[0].ok) {
         results.push({
           id: '_before_form_fields', type: 'get_form_fields', status: 'success',
@@ -98,6 +128,15 @@ async function pollActionQueue() {
       (r.type === 'screenshot' || r.type === 'screen_capture') && r.id !== '_before_screenshot'
     );
     if (!hadScreenshot) {
+      // Bring bot's tab to foreground so we screenshot the right page
+      if (lastQueueActionTabId) {
+        try {
+          await new Promise((resolve) => {
+            chrome.tabs.update(lastQueueActionTabId, { active: true }, () => resolve());
+          });
+          await new Promise(r => setTimeout(r, 200));
+        } catch { /* non-critical */ }
+      }
       try {
         const afterScreenshot = await captureScreenshotAsync();
         if (afterScreenshot) {
