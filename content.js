@@ -20,8 +20,9 @@
     }
     window.__taskingbotInjected = true;
 
+    // Use a blob URL to bypass CSP inline-script restrictions
     const script = document.createElement('script');
-    script.textContent = `
+    const code = `
 (function () {
   if (window.__taskingbotMonitorInjected) return;
   window.__taskingbotMonitorInjected = true;
@@ -108,8 +109,17 @@
     return send.apply(this, arguments);
   };
 })();`;
-    (document.documentElement || document.head || document.body).appendChild(script);
-    script.remove();
+    try {
+      const blob = new Blob([code], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      script.src = url;
+      script.onload = () => { URL.revokeObjectURL(url); script.remove(); };
+      script.onerror = () => { URL.revokeObjectURL(url); script.remove(); };
+      (document.documentElement || document.head || document.body).appendChild(script);
+    } catch (e) {
+      // CSP may still block blob: URLs on some pages — non-critical
+      console.warn('[TaskingBot] Monitor script blocked by CSP, console/network logging unavailable');
+    }
   }
 
   function getSafeLogs(buffer) {
