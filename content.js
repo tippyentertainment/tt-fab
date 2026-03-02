@@ -782,28 +782,7 @@
     return results;
   }
 
-  function initFab() {
-    let isOpen = false;
-
-    const fab = document.createElement('div');
-    fab.id = 'taskingbot-fab';
-    fab.innerHTML = `
-      <button id="fab-button" aria-label="TaskingBot"></button>
-    `;
-    document.body.appendChild(fab);
-
-    document.getElementById('fab-button').addEventListener('click', () => {
-      isOpen = !isOpen;
-      if (isOpen) {
-        chrome.runtime.sendMessage({ action: 'openSidePanel' });
-      } else {
-        chrome.runtime.sendMessage({ action: 'closeSidePanel' });
-      }
-    });
-  }
-
   injectMonitorScript();
-  initFab();
 
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
