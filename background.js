@@ -13,6 +13,7 @@ const QUEUE_POLL_INTERVAL_MS = 2000;
 const QUEUE_API_BASE = 'https://tasking.tech/_api/extension';
 let queuePollingActive = false;
 let queuePollTimer = null;
+let lastQueueActionTabId = null; // Track tab opened by navigate/open_tab for subsequent actions
 
 async function pollActionQueue() {
   if (queuePollingActive) return;
@@ -57,8 +58,9 @@ async function pollActionQueue() {
 
     console.log(`[Queue] Received ${data.actions.length} action(s) for queue ${data.id}`);
 
-    // Execute actions via sidepanel (which has the action execution logic)
-    // Forward to sidepanel for execution, or execute directly via content script
+    // Reset tab tracking for this batch
+    lastQueueActionTabId = null;
+
     const results = [];
     for (const action of data.actions) {
       const result = await executeQueuedAction(action);
@@ -178,6 +180,9 @@ async function executeQueuedAction(action) {
           resolve(tab);
         });
       });
+      // Track this tab so subsequent actions (screenshot, click, etc.) target it
+      lastQueueActionTabId = newTab.id;
+
       // Wait for page to finish loading (up to 15s)
       await new Promise((resolve) => {
         const onUpdate = (tabId, info) => {
@@ -196,8 +201,10 @@ async function executeQueuedAction(action) {
     }
 
     // All other actions (click, type, scroll, extract, submit, get_console_logs, get_network_logs)
-    // Forward to content script on the active tab
-    const response = await sendToActiveTab({ action: 'performActions', actions: [action] });
+    // Forward to content script — prefer the tab opened by a previous navigate/open_tab
+    const response = lastQueueActionTabId
+      ? await sendToTab(lastQueueActionTabId, { action: 'performActions', actions: [action] })
+      : await sendToActiveTab({ action: 'performActions', actions: [action] });
     if (!response || response.error) {
       return {
         ...resultBase,
@@ -385,11 +392,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'performActions') {
-    sendToActiveTab({ action: 'performActions', actions: request.actions || [] })
-      .then((response) => sendResponse(response || { results: [] }))
-      .catch((err) =>
-        sendResponse({ error: err && err.message ? err.message : 'Failed to perform actions' }),
-      );
+    (async () => {
+      try {
+        const actions = request.actions || [];
+        const results = [];
+        // Handle each action — intercept navigate/open_tab to open new tabs
+        for (const action of actions) {
+          const type = normalizeQueueActionType(action);
+          if (type === 'navigate' || type === 'open_tab') {
+            if (!action.url) {
+              results.push({ id: action.id, type, ok: false, error: 'Missing url' });
+              continue;
+            }
+            const tab = await new Promise((resolve) => {
+              chrome.tabs.create({ url: action.url, active: true }, resolve);
+            });
+            results.push({ id: action.id, type, ok: true, data: { url: action.url, tabId: tab.id } });
+          } else {
+            // Forward to content script on active tab
+            const resp = await sendToActiveTab({ action: 'performActions', actions: [action] });
+            if (resp && resp.results) {
+              results.push(...resp.results);
+            } else {
+              results.push({ id: action.id, type, ok: false, error: resp?.error || 'No response' });
+            }
+          }
+        }
+        sendResponse({ results });
+      } catch (err) {
+        sendResponse({ error: err && err.message ? err.message : 'Failed to perform actions' });
+      }
+    })();
     return true;
   }
 
@@ -460,6 +493,19 @@ function sendToActiveTab(message) {
         }
         resolve(response);
       });
+    });
+  });
+}
+
+// Send message to a specific tab by ID
+function sendToTab(tabId, message) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, message, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(response);
     });
   });
 }
