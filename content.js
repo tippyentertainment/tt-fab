@@ -150,6 +150,8 @@
     if (raw === 'get_page_info' || raw === 'page_info' || raw === 'read_page') return 'get_page_info';
     if (raw === 'focus') return 'focus';
     if (raw === 'clear') return 'clear';
+    if (raw === 'hover' || raw === 'mouseover' || raw === 'mouse_over') return 'hover';
+    if (raw === 'mouse_move' || raw === 'mousemove' || raw === 'move_mouse' || raw === 'move') return 'mouse_move';
     return raw;
   }
 
@@ -199,6 +201,71 @@
       return findByText(action.text);
     }
     return null;
+  }
+
+  // ── Real Mouse Event Simulation ──────────────────────────────────
+  // Dispatches proper MouseEvent/PointerEvent sequences with real coordinates.
+  // This makes React/Vue/Angular custom components respond correctly,
+  // unlike basic .click() which many custom widgets ignore.
+  function simulateMouseEvent(element, eventType, opts) {
+    const rect = element.getBoundingClientRect();
+    const x = opts?.clientX ?? (rect.left + rect.width / 2);
+    const y = opts?.clientY ?? (rect.top + rect.height / 2);
+    const eventInit = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      screenX: x + (window.screenX || 0),
+      screenY: y + (window.screenY || 0),
+      button: 0,
+      buttons: (eventType === 'mousedown' || eventType === 'pointerdown') ? 1 : 0,
+    };
+    if (eventType.startsWith('pointer')) {
+      try {
+        element.dispatchEvent(new PointerEvent(eventType, { ...eventInit, pointerId: 1, pointerType: 'mouse' }));
+      } catch (e) {
+        element.dispatchEvent(new MouseEvent(eventType.replace('pointer', 'mouse'), eventInit));
+      }
+    } else {
+      element.dispatchEvent(new MouseEvent(eventType, eventInit));
+    }
+  }
+
+  function simulateRealClick(element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const coords = { clientX: x, clientY: y };
+    // Full event sequence — triggers all framework event handlers
+    simulateMouseEvent(element, 'pointerenter', coords);
+    simulateMouseEvent(element, 'mouseenter', coords);
+    simulateMouseEvent(element, 'pointerover', coords);
+    simulateMouseEvent(element, 'mouseover', coords);
+    simulateMouseEvent(element, 'pointermove', coords);
+    simulateMouseEvent(element, 'mousemove', coords);
+    simulateMouseEvent(element, 'pointerdown', coords);
+    simulateMouseEvent(element, 'mousedown', coords);
+    element.focus();
+    simulateMouseEvent(element, 'pointerup', coords);
+    simulateMouseEvent(element, 'mouseup', coords);
+    simulateMouseEvent(element, 'click', coords);
+  }
+
+  function simulateHover(element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const coords = { clientX: x, clientY: y };
+    simulateMouseEvent(element, 'pointerenter', coords);
+    simulateMouseEvent(element, 'mouseenter', coords);
+    simulateMouseEvent(element, 'pointerover', coords);
+    simulateMouseEvent(element, 'mouseover', coords);
+    simulateMouseEvent(element, 'pointermove', coords);
+    simulateMouseEvent(element, 'mousemove', coords);
   }
 
   async function waitForSelector(selector, timeoutMs) {
@@ -271,15 +338,43 @@
 
       if (type === 'click') {
         let target = null;
-        if (action.selector) {
+        // Coordinate-based click — find element at (x, y) viewport coordinates
+        if (typeof action.x === 'number' && typeof action.y === 'number') {
+          target = document.elementFromPoint(action.x, action.y);
+          if (!target) return { ok: false, error: `No element at coordinates (${action.x}, ${action.y})` };
+        } else if (action.selector) {
           target = action.waitFor ? await waitForSelector(action.selector, action.timeoutMs) : document.querySelector(action.selector);
         } else {
           target = findElement(action);
         }
         if (!target) return { ok: false, error: 'Click target not found' };
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        target.click();
-        return { ok: true, data: { selector: action.selector || null } };
+        simulateRealClick(target);
+        return { ok: true, data: {
+          selector: action.selector || null,
+          tag: target.tagName.toLowerCase(),
+          text: (target.innerText || target.value || '').substring(0, 80),
+          id: target.id || null,
+        }};
+      }
+
+      if (type === 'hover' || type === 'mouse_move') {
+        let target = null;
+        if (typeof action.x === 'number' && typeof action.y === 'number') {
+          target = document.elementFromPoint(action.x, action.y);
+        } else if (action.selector) {
+          target = action.waitFor ? await waitForSelector(action.selector, action.timeoutMs) : document.querySelector(action.selector);
+        } else {
+          target = findElement(action);
+        }
+        if (!target) return { ok: false, error: 'Hover/mouse_move target not found' };
+        simulateHover(target);
+        const rect = target.getBoundingClientRect();
+        return { ok: true, data: {
+          selector: action.selector || null,
+          tag: target.tagName.toLowerCase(),
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+        }};
       }
 
       if (type === 'type') {
@@ -296,11 +391,16 @@
           target.textContent = text;
         } else {
           target.focus();
+          // Use native value setter for React/Vue controlled input compatibility
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+            || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
           if (action.clear !== false && 'value' in target) {
-            target.value = '';
+            if (nativeSetter) { nativeSetter.call(target, ''); }
+            else { target.value = ''; }
           }
           if ('value' in target) {
-            target.value = text;
+            if (nativeSetter) { nativeSetter.call(target, text); }
+            else { target.value = text; }
           }
         }
         target.dispatchEvent(new Event('input', { bubbles: true }));
@@ -374,14 +474,35 @@
           return { ok: true, data: { checked: target.checked } };
         }
 
-        // Custom dropdown — try clicking the matching option text inside the container
-        const optionEl = findByText(String(val), ['[role="option"]', '[role="menuitem"]', 'li', 'div', 'span']);
+        // Custom dropdown — click trigger to open, wait for options, then click match
+        simulateRealClick(target);
+        await new Promise(r => setTimeout(r, 400)); // Wait for dropdown animation
+
+        // Search for the option in expanded dropdown/menu
+        const customSelectors = [
+          '[role="option"]', '[role="menuitem"]', '[role="listitem"]',
+          'li[data-value]', '.option', '.dropdown-item', '.select-option',
+          '[class*="option"]', '[class*="menu-item"]', '[class*="listbox"]',
+          '[class*="dropdown-option"]', 'li', 'div[data-value]', 'span[data-value]',
+        ];
+        const optionEl = findByText(String(val), customSelectors);
         if (optionEl) {
-          optionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          optionEl.click();
-          return { ok: true, data: { clickedOption: String(val) } };
+          simulateRealClick(optionEl);
+          return { ok: true, data: { clickedOption: String(val), method: 'custom_dropdown' } };
         }
-        return { ok: false, error: `Could not select "${val}" — element is not a select/radio/checkbox and no matching option found` };
+
+        // Second attempt — scan ALL matching elements for partial text match
+        const allOptions = document.querySelectorAll(customSelectors.join(','));
+        const needle = String(val).toLowerCase();
+        for (const opt of allOptions) {
+          const optText = (opt.innerText || opt.textContent || opt.getAttribute('data-value') || '').trim().toLowerCase();
+          if (optText && (optText.includes(needle) || needle.includes(optText))) {
+            simulateRealClick(opt);
+            return { ok: true, data: { clickedOption: optText, method: 'custom_dropdown_scan' } };
+          }
+        }
+
+        return { ok: false, error: `Could not select "${val}" — not a <select>/radio/checkbox and no matching option in custom dropdown` };
       }
 
       if (type === 'get_form_fields') {

@@ -305,6 +305,8 @@ function normalizeQueueActionType(action) {
   if (raw === 'upload_file' || raw === 'upload' || raw === 'file_upload' || raw === 'attach') return 'upload_file';
   if (raw === 'focus') return 'focus';
   if (raw === 'clear') return 'clear';
+  if (raw === 'hover' || raw === 'mouseover' || raw === 'mouse_over') return 'hover';
+  if (raw === 'mouse_move' || raw === 'mousemove' || raw === 'move_mouse' || raw === 'move') return 'mouse_move';
   return raw;
 }
 
@@ -366,6 +368,7 @@ async function sendHeartbeat() {
           'screenshot', 'screen_capture', 'navigate', 'open_tab',
           'click', 'type', 'select', 'set_value', 'upload_file',
           'submit', 'scroll', 'extract', 'focus', 'clear',
+          'hover', 'mouse_move',
           'get_form_fields', 'get_page_info',
           'get_console_logs', 'get_network_logs', 'wait',
         ],
