@@ -184,37 +184,56 @@
     if (!el || el === document.body || el === document.documentElement) return null;
     // Best: id
     if (el.id) return `#${CSS.escape(el.id)}`;
-    // Good: name attribute
-    if (el.name) return `${el.tagName.toLowerCase()}[name="${CSS.escape(el.name)}"]`;
-    // Build a path from the nearest ancestor with an id, or from body
-    const parts = [];
-    let current = el;
-    while (current && current !== document.body && current !== document.documentElement && parts.length < 5) {
-      let seg = current.tagName.toLowerCase();
-      if (current.id) {
-        parts.unshift(`#${CSS.escape(current.id)}`);
-        break;
-      }
-      // Use nth-of-type for uniqueness among siblings
-      const parent = current.parentElement;
-      if (parent) {
-        const siblings = Array.from(parent.children).filter(c => c.tagName === current.tagName);
-        if (siblings.length > 1) {
-          const idx = siblings.indexOf(current) + 1;
-          seg += `:nth-of-type(${idx})`;
-        }
-      }
-      parts.unshift(seg);
-      current = current.parentElement;
+    // Good: name attribute (validate uniqueness)
+    if (el.name) {
+      const sel = `${el.tagName.toLowerCase()}[name="${CSS.escape(el.name)}"]`;
+      try { if (document.querySelector(sel) === el) return sel; } catch {}
     }
-    const selector = parts.join(' > ');
-    // Validate: does this selector uniquely find the element?
-    try {
-      const found = document.querySelector(selector);
-      if (found === el) return selector;
-    } catch { /* invalid selector */ }
-    // Fallback: use full path from body
-    return null;
+
+    // Build a CSS path from the element up to the nearest ancestor with an id or body.
+    // Try increasing depths (3→8) until we find a unique selector.
+    // Adds meaningful CSS classes + nth-of-type for disambiguation.
+    for (let maxDepth = 3; maxDepth <= 8; maxDepth++) {
+      const parts = [];
+      let current = el;
+      while (current && current !== document.body && current !== document.documentElement && parts.length < maxDepth) {
+        let seg = current.tagName.toLowerCase();
+        if (current.id) {
+          parts.unshift(`#${CSS.escape(current.id)}`);
+          break;
+        }
+        // Add a meaningful class for specificity (skip framework state classes)
+        if (current.className && typeof current.className === 'string') {
+          const cls = current.className.split(/\s+/).find(c =>
+            c && c.length > 1 && c.length < 40 &&
+            !/^(ng-|is-|has-|js-|active|focus|hover|open|show|hide|disabled|selected|checked|error|valid|invalid|dirty|pristine|touched|untouched)/.test(c)
+          );
+          if (cls) seg += `.${CSS.escape(cls)}`;
+        }
+        // Use nth-of-type for uniqueness among siblings with same tag
+        const parent = current.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.children).filter(c => c.tagName === current.tagName);
+          if (siblings.length > 1) {
+            const idx = siblings.indexOf(current) + 1;
+            seg += `:nth-of-type(${idx})`;
+          }
+        }
+        parts.unshift(seg);
+        current = current.parentElement;
+      }
+      const selector = parts.join(' > ');
+      try {
+        const found = document.querySelector(selector);
+        if (found === el) return selector;
+      } catch { /* invalid selector */ }
+    }
+
+    // Fallback: stamp the element with a unique data attribute so it can always be found.
+    // This works universally — even for deeply nested elements in repeated structures.
+    const uid = 'tb_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    el.setAttribute('data-tb-sel', uid);
+    return `[data-tb-sel="${uid}"]`;
   }
 
   async function waitForSelector(selector, timeoutMs) {
