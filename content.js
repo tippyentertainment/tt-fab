@@ -258,11 +258,25 @@
       }
 
       if (type === 'get_console_logs') {
-        return { ok: true, data: getSafeLogs(consoleLogs) };
+        const logs = getSafeLogs(consoleLogs);
+        const errors = logs.filter(l => l.level === 'error').slice(-10);
+        const warnings = logs.filter(l => l.level === 'warn').slice(-5);
+        return { ok: true, data: {
+          summary: `${logs.length} logs (${errors.length} errors, ${warnings.length} warnings)`,
+          errors,
+          warnings,
+          recent: logs.slice(-10),
+        }};
       }
 
       if (type === 'get_network_logs') {
-        return { ok: true, data: getSafeLogs(networkLogs) };
+        const logs = getSafeLogs(networkLogs);
+        const failed = logs.filter(l => !l.ok).slice(-10);
+        return { ok: true, data: {
+          summary: `${logs.length} requests (${failed.length} failed)`,
+          failed,
+          recent: logs.slice(-10),
+        }};
       }
 
       if (type === 'navigate') {
@@ -275,7 +289,7 @@
       if (type === 'scroll') {
         if (action.selector) {
           const target = document.querySelector(action.selector);
-          if (!target) return { ok: false, error: 'Scroll target not found' };
+          if (!target) return { ok: false, error: `Scroll target not found: selector="${action.selector || ''}"` };
           target.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return { ok: true, data: { selector: action.selector } };
         }
@@ -290,7 +304,7 @@
         if (action.selector) {
           target = document.querySelector(action.selector);
         }
-        if (!target) return { ok: false, error: 'Extract target not found' };
+        if (!target) return { ok: false, error: `Extract target not found: selector="${action.selector || ''}"` };
         const attribute = action.attribute;
         if (action.all) {
           const nodes = Array.from(document.querySelectorAll(action.selector));
@@ -315,7 +329,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'Click target not found' };
+        if (!target) return { ok: false, error: `Click target not found: selector="${action.selector || ''}" text="${action.text || ''}" x=${action.x ?? 'none'} y=${action.y ?? 'none'}` };
         simulateRealClick(target);
         return { ok: true, data: {
           selector: action.selector || null,
@@ -334,7 +348,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'Hover/mouse_move target not found' };
+        if (!target) return { ok: false, error: `Hover/mouse_move target not found: selector="${action.selector || ''}" text="${action.text || ''}"` };
         simulateHover(target);
         const rect = target.getBoundingClientRect();
         return { ok: true, data: {
@@ -352,7 +366,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'Type target not found' };
+        if (!target) return { ok: false, error: `Type target not found: selector="${action.selector || ''}" text="${action.text || ''}"` };
         const text = action.text ?? action.value ?? '';
         if (target.isContentEditable) {
           target.focus();
@@ -383,7 +397,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'Submit target not found' };
+        if (!target) return { ok: false, error: `Submit target not found: selector="${action.selector || ''}" text="${action.text || ''}"` };
         const form = target.tagName === 'FORM' ? target : target.form;
         if (form && typeof form.requestSubmit === 'function') {
           form.requestSubmit();
@@ -405,7 +419,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'Select target not found' };
+        if (!target) return { ok: false, error: `Select target not found: selector="${action.selector || ''}" text="${action.text || ''}"` };
         const val = action.value ?? action.text ?? '';
 
         // ── Native <select> dropdown ──────────────────────────────────
@@ -650,7 +664,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'set_value target not found' };
+        if (!target) return { ok: false, error: `set_value target not found: selector="${action.selector || ''}"` };
         const val = action.value ?? action.text ?? '';
         const inputType = (target.type || '').toLowerCase();
         // Handle native input types that need special setter (React/Vue controlled inputs)
@@ -678,7 +692,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'upload_file target not found' };
+        if (!target) return { ok: false, error: `upload_file target not found: selector="${action.selector || ''}"` };
         if (target.tagName !== 'INPUT' || target.type !== 'file') {
           return { ok: false, error: 'Target is not a file input' };
         }
@@ -717,7 +731,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'Focus target not found' };
+        if (!target) return { ok: false, error: `Focus target not found: selector="${action.selector || ''}"` };
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         target.focus();
         return { ok: true, data: { selector: action.selector || null } };
@@ -730,7 +744,7 @@
         } else {
           target = findElement(action);
         }
-        if (!target) return { ok: false, error: 'Clear target not found' };
+        if (!target) return { ok: false, error: `Clear target not found: selector="${action.selector || ''}"` };
         if (target.isContentEditable) {
           target.textContent = '';
         } else if ('value' in target) {
