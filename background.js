@@ -81,40 +81,19 @@ async function pollActionQueue() {
 
     const results = [];
 
-    // ── BEFORE: Auto-capture screenshot + form fields BEFORE actions ──
-    // Target the bot's tab (lastQueueActionTabId) if available, not whatever tab the user has open
+    // Before-capture removed: the AI already has the after-screenshot from the previous
+    // round, so a "before" capture is redundant — just adds ~400ms latency + extra vision API call.
+    // The after-capture (below) provides the final state which is what matters.
+
+    // Bring bot's tab to foreground before executing actions (if we have one)
     if (lastQueueActionTabId) {
-      // Bring bot's tab to foreground for screenshot
       try {
         await new Promise((resolve) => {
           chrome.tabs.update(lastQueueActionTabId, { active: true }, () => resolve());
         });
-        await new Promise(r => setTimeout(r, 200)); // Brief settle
+        await new Promise(r => setTimeout(r, 150)); // Brief settle
       } catch { /* non-critical */ }
     }
-
-    try {
-      const beforeScreenshot = await captureScreenshotAsync();
-      if (beforeScreenshot) {
-        const b64 = beforeScreenshot.match(/^data:[^;]+;base64,(.+)$/);
-        results.push({
-          id: '_before_screenshot', type: 'screenshot', status: 'success',
-          data: { screenshot: true, phase: 'before', image_base64: b64 ? b64[1] : null },
-        });
-      }
-    } catch (e) { console.warn('[Queue] Before-screenshot failed:', e); }
-
-    try {
-      const beforeForm = lastQueueActionTabId
-        ? await sendToTab(lastQueueActionTabId, { action: 'performActions', actions: [{ type: 'get_form_fields' }] })
-        : await sendToActiveTab({ action: 'performActions', actions: [{ type: 'get_form_fields' }] });
-      if (beforeForm && beforeForm.results && beforeForm.results[0] && beforeForm.results[0].ok) {
-        results.push({
-          id: '_before_form_fields', type: 'get_form_fields', status: 'success',
-          data: { phase: 'before', ...beforeForm.results[0].data },
-        });
-      }
-    } catch (e) { /* Page might not have forms */ }
 
     // ── EXECUTE: Run the queued actions ──
     for (const action of data.actions) {
@@ -125,7 +104,7 @@ async function pollActionQueue() {
     // ── AFTER: Auto-capture screenshot + form fields AFTER actions ──
     // Shows the AI what changed and what's available to interact with next
     const hadScreenshot = results.some((r) =>
-      (r.type === 'screenshot' || r.type === 'screen_capture') && r.id !== '_before_screenshot'
+      r.type === 'screenshot' || r.type === 'screen_capture'
     );
     if (!hadScreenshot) {
       // Bring bot's tab to foreground so we screenshot the right page
