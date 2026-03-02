@@ -144,6 +144,31 @@
     }
   }
 
+  // Find React fiber attached to a DOM element
+  function getReactFiber(el) {
+    if (!el) return null;
+    const key = Object.keys(el).find(k =>
+      k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+    return key ? el[key] : null;
+  }
+
+  // Walk React fiber tree to find an onClick (or other) handler
+  function findReactHandler(el, handlerName) {
+    // Check the element and up to 10 ancestor fibers
+    let current = el;
+    for (let depth = 0; depth < 10 && current; depth++) {
+      let fiber = getReactFiber(current);
+      while (fiber) {
+        if (fiber.memoizedProps && typeof fiber.memoizedProps[handlerName] === 'function') {
+          return fiber.memoizedProps[handlerName];
+        }
+        fiber = fiber.return;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
   async function simulateRealClick(element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await new Promise(r => setTimeout(r, 100)); // Let scroll settle
@@ -151,7 +176,8 @@
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
     const coords = { clientX: x, clientY: y };
-    // Full event sequence — triggers all framework event handlers
+
+    // Strategy 1: Full DOM event sequence
     simulateMouseEvent(element, 'pointerenter', coords);
     simulateMouseEvent(element, 'mouseenter', coords);
     simulateMouseEvent(element, 'pointerover', coords);
@@ -161,13 +187,29 @@
     simulateMouseEvent(element, 'pointerdown', coords);
     simulateMouseEvent(element, 'mousedown', coords);
     element.focus();
-    await new Promise(r => setTimeout(r, 80)); // Realistic click timing
+    await new Promise(r => setTimeout(r, 80));
     simulateMouseEvent(element, 'pointerup', coords);
     simulateMouseEvent(element, 'mouseup', coords);
     simulateMouseEvent(element, 'click', coords);
-    // Fallback: element.click() produces isTrusted:true events that React respects
+
+    // Strategy 2: Native .click() — produces isTrusted:true
     await new Promise(r => setTimeout(r, 50));
     element.click();
+
+    // Strategy 3: Click the element at coordinates (handles overlays)
+    await new Promise(r => setTimeout(r, 50));
+    const elAtPoint = document.elementFromPoint(x, y);
+    if (elAtPoint && elAtPoint !== element) {
+      elAtPoint.click();
+    }
+
+    // Strategy 4: React fiber handler invocation (nuclear option for React/Next.js apps)
+    try {
+      const handler = findReactHandler(element, 'onClick');
+      if (handler) {
+        handler({ preventDefault() {}, stopPropagation() {}, target: element, currentTarget: element, nativeEvent: new MouseEvent('click', { bubbles: true }) });
+      }
+    } catch (e) { /* React handler invocation failed — non-critical */ }
   }
 
   function simulateHover(element) {
